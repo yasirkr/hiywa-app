@@ -1,15 +1,14 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
-import { Asset } from 'expo-asset';
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, BackHandler, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Animated, BackHandler, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
 
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, getFirestore, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 
 // --- FIREBASE INITIALIZATION ---
@@ -26,6 +25,66 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// --- GLOBAL ALERT OVERRIDE (NO CHROME POPUPS) ---
+let globalAlertTrigger = null;
+
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+   window.alert = (msg) => {
+     if (globalAlertTrigger) globalAlertTrigger({ title: 'Notice', message: String(msg), buttons: [{ text: 'OK' }] });
+     else console.log("Alert:", msg);
+   };
+}
+
+const originalAlert = Alert.alert;
+Alert.alert = (title, message, buttons) => {
+   if (globalAlertTrigger) {
+     globalAlertTrigger({ title: title || 'Notice', message: message || '', buttons: buttons || [{ text: 'OK', style: 'default' }] });
+   } else {
+     if (Platform.OS === 'web') console.log("Alert:", title, message);
+     else originalAlert(title, message, buttons);
+   }
+};
+
+const confirmAction = (title, message, onConfirm, confirmText = 'Confirm', destructive = true) => {
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: confirmText, style: destructive ? 'destructive' : 'default', onPress: onConfirm }
+  ]);
+};
+
+// THE CUSTOM IN-BUILT MODAL COMPONENT
+const CustomAlertProvider = () => {
+  const [config, setConfig] = useState(null);
+  useEffect(() => { globalAlertTrigger = setConfig; }, []);
+  if (!config) return null;
+
+  return (
+    <View style={[styles.modalOverlay, { zIndex: 999999 }]}>
+      <View style={[styles.modalCard, { alignItems: 'center', maxWidth: 350, padding: 24 }]}>
+        <Text style={{ fontSize: 20, fontWeight: '800', color: '#004085', marginBottom: config.message ? 12 : 24, textAlign: 'center' }}>{config.title}</Text>
+        {!!config.message && <Text style={{ fontSize: 14, color: '#475569', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>{config.message}</Text>}
+        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
+          {config.buttons.map((btn, idx) => {
+             const isCancel = btn.style === 'cancel';
+             const isDestruct = btn.style === 'destructive';
+             return (
+               <TouchableOpacity 
+                 key={idx} 
+                 style={[styles.button, { flex: 1, minWidth: 100, paddingVertical: 12, marginTop: 0, backgroundColor: isCancel ? '#F1F5F9' : isDestruct ? '#EF4444' : '#004085', borderWidth: isCancel ? 1 : 0, borderColor: '#CBD5E1' }]}
+                 onPress={() => {
+                    setConfig(null);
+                    if (btn.onPress) btn.onPress();
+                 }}
+               >
+                 <Text style={[styles.buttonText, { color: isCancel ? '#475569' : '#FFFFFF', fontSize: 14, textAlign: 'center' }]}>{btn.text || 'OK'}</Text>
+               </TouchableOpacity>
+             );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+};
 
 // --- CONSTANTS ---
 const EDU_CATEGORIES = ['MEDICAL', 'ENGINEERING & IT', 'ARTS & SCIENCE', 'COMMERCE & MANAGEMENT', 'LAW', 'AGRICULTURE', 'DIPLOMA / ITI', 'SCHOOL LEVEL', 'PHD / DOCTORATE', 'OTHERS'];
@@ -120,7 +179,7 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
         <View style={[styles.sidebarContainer, isMobile && styles.sidebarMobileAbsolute]}>
           <View style={styles.sidebarHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-               <Image source={require('./hiywalogo.jpeg')} style={{ width: 40, height: 40, borderRadius: 8, marginRight: 10 }} />
+               <Image source={require('./hiywalogo.png')} style={{ width: 70, height: 70, borderRadius: 8, marginRight: 10 }} />
                <View>
                  <Text style={styles.sidebarBrand}>HIYWA</Text>
                  <Text style={styles.sidebarRole}>{currentUser?.role}</Text>
@@ -171,32 +230,33 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
 
 
       <View style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-        <View style={styles.contentHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {isMobile && (
-              <TouchableOpacity onPress={() => setIsOpen(true)} style={{ marginRight: 16, padding: 8 }}>
-                <Text style={{ fontSize: 24, color: '#004085' }}>☰</Text>
-              </TouchableOpacity>
-            )}
-            <Text style={styles.contentTitle}>
-              {currentView === 'dashboard' ? 'Overview' : 
-               currentView === 'admin_stats' ? 'Overview Stats' :
-               currentView === 'admin_users' ? 'Member Directory' :
-               currentView === 'admin_students' ? 'Student Directory' :
-               currentView === 'admin_finance' ? 'Finance Ledger' :
-               currentView === 'admin_expense' ? 'Trust Expenses' :
-               currentView === 'admin_campaigns' ? 'Campaign Control' :
-               currentView === 'admin_settings' ? 'System Settings' :
-               currentView === 'admin_roles' ? 'Admin Roles' :
-               currentView === 'donate' ? 'General Donation' :
-               currentView === 'subscription' ? 'My Subscriptions' :
-               currentView === 'fundraising' ? 'Fund Drives' :
-               currentView === 'campaignDetail' ? 'Campaign Details' :
-               currentView === 'receipt' ? 'Official Receipt' : 'Portal'}
-            </Text>
+        {currentView !== 'register' && currentView !== 'adminRegister' && (
+          <View style={styles.contentHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {isMobile && (
+                <TouchableOpacity onPress={() => setIsOpen(true)} style={{ marginRight: 16, padding: 8 }}>
+                  <Text style={{ fontSize: 24, color: '#004085' }}>☰</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={styles.contentTitle}>
+                {currentView === 'dashboard' ? 'Overview' : 
+                 currentView === 'admin_stats' ? 'Overview Stats' :
+                 currentView === 'admin_users' ? 'Member Directory' :
+                 currentView === 'admin_students' ? 'Student Directory' :
+                 currentView === 'admin_finance' ? 'Finance Ledger' :
+                 currentView === 'admin_expense' ? 'Trust Expenses' :
+                 currentView === 'admin_campaigns' ? 'Campaign Control' :
+                 currentView === 'admin_settings' ? 'System Settings' :
+                 currentView === 'admin_roles' ? 'Admin Roles' :
+                 currentView === 'donate' ? 'General Donation' :
+                 currentView === 'subscription' ? 'My Subscriptions' :
+                 currentView === 'fundraising' ? 'Fund Drives' :
+                 currentView === 'campaignDetail' ? 'Campaign Details' :
+                 currentView === 'receipt' ? 'Official Receipt' : 'Portal'}
+              </Text>
+            </View>
           </View>
-        </View>
-
+        )}
 
         <View style={{ flex: 1 }}>{children}</View>
       </View>
@@ -213,6 +273,15 @@ let globalShowPastDrives = false;
 // 2. MAIN APP ROUTER
 // ==========================================
 export default function MainApp() {
+  return (
+    <>
+      <CustomAlertProvider />
+      <MainAppContent />
+    </>
+  );
+}
+
+function MainAppContent() {
   const [currentView, setCurrentView] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
@@ -237,15 +306,14 @@ export default function MainApp() {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
 
-    // NEW: Web Browser Back Button Alert
+    // NEW: Web Browser Back Button Alert (Using Custom Modal)
     if (Platform.OS === 'web') {
       const handleWebBack = (e) => {
         e.preventDefault();
-        if (window.confirm("⚠️ Are you sure you want to exit the HIYWA portal? You will be logged out.")) {
-           setCurrentUser(null); setCurrentView('login');
-        } else {
-           window.history.pushState(null, '', window.location.href);
-        }
+        Alert.alert("Exit Portal", "Are you sure you want to exit the HIYWA portal? You will be logged out.", [
+           { text: "Cancel", style: "cancel", onPress: () => window.history.pushState(null, '', window.location.href) },
+           { text: "Exit", style: "destructive", onPress: () => { setCurrentUser(null); setCurrentView('login'); } }
+        ]);
       };
       window.history.pushState(null, '', window.location.href);
       window.addEventListener('popstate', handleWebBack);
@@ -417,7 +485,7 @@ function LoginScreen({ onNavigate, onLogin }) {
   return (
     <KeyboardAvoidingView style={styles.authContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.authCard}>
-        <View style={{ alignItems: 'center', marginBottom: 15 }}><Image source={require('./hiywalogo.jpeg')} style={{ width: 80, height: 80, borderRadius: 16 }} resizeMode="contain" /></View>
+        <View style={{ alignItems: 'center', marginBottom: 15 }}><Image source={require('./hiywalogo.png')} style={{ width: 120, height: 120, borderRadius: 16 }} resizeMode="contain" /></View>
         <Text style={styles.authTitle}>HIYWA Connect</Text>
         <Text style={styles.authSubtitle}>Secure Member Portal</Text>
         <Text style={styles.label}>Official Login ID</Text>
@@ -446,7 +514,9 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
 
 
   const [editParentsDrop, setEditParentsDrop] = useState(false);
+  const [editGenderDrop, setEditGenderDrop] = useState(false);
   const [editBloodDrop, setEditBloodDrop] = useState(false);
+  const [editMaritalDrop, setEditMaritalDrop] = useState(false); // <--- ADDED MISSING STATE
   const [editNativeDrop, setEditNativeDrop] = useState(false);
   const [editClassDrop, setEditClassDrop] = useState(false);
   const [editSchoolTypeDrop, setEditSchoolTypeDrop] = useState(false);
@@ -503,124 +573,166 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
   };
 
 
-  if (showIdCardModal) {
-    const age = currentUser.dob ? (new Date().getFullYear() - new Date(currentUser.dob).getFullYear()) : 'N/A';
-    return (
-      <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
-         <TouchableOpacity style={[styles.neatBtnDark, {alignSelf: 'flex-start', marginLeft: 20, marginBottom: 20, marginTop: 20}]} onPress={() => setShowIdCardModal(false)}><Text style={styles.neatBtnTextDark}>← Back to Dashboard</Text></TouchableOpacity>
-         <View style={styles.idCardContainer}>
-            <View style={{zIndex: 1}}>
-                <View style={styles.idCardHeader}>
-                   <Text style={{color: 'white', fontWeight: 'bold', fontSize: 22, textAlign: 'center', letterSpacing: 1, marginBottom: 2}}>HIYWA</Text>
-                   <Text style={{color: 'white', fontWeight: 'bold', fontSize: 11, textAlign: 'center'}}>Hidhayathul Islam Youth Welfare Trust</Text>
-                </View>
-                <View style={{padding: 20, alignItems: 'center'}}>
-                   {profileImage ? <Image source={{uri: profileImage}} style={styles.idCardPhoto} /> : <View style={[styles.idCardPhoto, {justifyContent:'center', alignItems:'center'}]}><Text style={{fontSize:40}}>👤</Text></View>}
-                   <Text style={{fontSize: 22, fontWeight: '900', color: '#004085', marginTop: 10}}>{currentUser.full_name}</Text>
-                   <Text style={{fontSize: 16, color: '#64748B', fontWeight: '800', marginTop: 5}}>ID: {currentUser.official_id}</Text>
-                   <View style={{marginTop: 15, width: '100%', alignItems: 'flex-start'}}>
-                      <Text style={{fontSize: 13, color: '#475569', marginBottom: 6}}><b>Role:</b> {currentUser.role}</Text>
-                      <Text style={{fontSize: 13, color: '#475569', marginBottom: 6}}><b>Age / Blood:</b> {age} / {currentUser.blood_group || 'N/A'}</Text>
-                      <Text style={{fontSize: 13, color: '#475569', marginBottom: 6}}><b>Phone:</b> {currentUser.phone_number}</Text>
-                   </View>
-                </View>
-            </View>
-         </View>
-         <TouchableOpacity style={[styles.button, {marginTop: 20, width: 320}]} onPress={printMyIDCard}><Text style={styles.buttonText}>🖨️ Download / Share</Text></TouchableOpacity>
-      </View>
-    );
-  }
+  
 
 
   if (isEditingProfile) {
     const formattedDob = editFormData.dob ? (() => { try { const d = new Date(editFormData.dob); return isNaN(d) ? editFormData.dob : d.toISOString().split('T')[0]; } catch(e){ return editFormData.dob; }})() : '';
-    const isCollegeEditUser = ['UG - BACHELORS', 'PG - MASTERS', 'PHD', 'ITI / DIPLOMA'].includes(editFormData.class_grade);
+    const displayAadhaar = editFormData.aadhaar_number || editFormData.aadhar_number || '';
+    const isCollegeEdit = ['UG - BACHELORS', 'PG - MASTERS', 'PHD', 'ITI / DIPLOMA'].includes(editFormData.class_grade);
 
+    // ALERT LOGIC FOR BACK BUTTON
+    const handleCancelProfileEdit = () => {
+      confirmAction(
+        "Discard Changes?", 
+        "Are you sure you want to go back? Any unsaved changes will be lost.", 
+        () => setIsEditingProfile(false), 
+        "Discard", 
+        true
+      );
+    };
+
+    // RESPONSIVE GRID & SHADE STYLES
+    const wrapStyle = { flex: 1, minWidth: 260 }; 
+    const dropStyle = [styles.dropdownBtn, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }];
 
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{ padding: 24 }}>
           <View style={styles.formCard}>
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
-              <Text style={styles.sectionTitle}>Edit Profile details</Text>
-              <TouchableOpacity style={styles.neatBtnDark} onPress={() => setIsEditingProfile(false)}><Text style={styles.neatBtnTextDark}>Cancel</Text></TouchableOpacity>
-            </View>
             
+            {/* STANDARDIZED TOP ACTION BAR */}
+            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}>
+              <TouchableOpacity style={styles.neatBtnDark} onPress={handleCancelProfileEdit}>
+                <Text style={styles.neatBtnTextDark}>← Back</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Edit My Profile</Text>
+            </View>
+
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <TouchableOpacity onPress={pickImage}>
                 {editFormData.profile_photo ? <Image source={{uri: editFormData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Photo</Text></View>}
+                <Text style={{color: '#004085', fontWeight: '800', marginTop: 8, textAlign: 'center'}}>Change Photo</Text>
               </TouchableOpacity>
             </View>
 
+            <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 10}]}>Personal Details</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+              <View style={wrapStyle}><Text style={styles.label}>Full Name</Text><TextInput style={styles.input} value={editFormData.full_name || ''} onChangeText={t=>setEditFormData({...editFormData, full_name: t})} /></View>
+              <View style={wrapStyle}><Text style={styles.label}>Father's Name</Text><TextInput style={styles.input} value={editFormData.father_name || ''} onChangeText={t=>setEditFormData({...editFormData, father_name: t})} /></View>
+              <View style={wrapStyle}><Text style={styles.label}>Mother's Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={editFormData.mother_name || ''} onChangeText={t => setEditFormData({...editFormData, mother_name: t})} /></View>
+              
+              <View style={wrapStyle}><Text style={styles.label}>Parents Status</Text>
+              <TouchableOpacity style={dropStyle} onPress={() => setEditParentsDrop(!editParentsDrop)}><Text style={styles.dropdownBtnText}>{editFormData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
+              {editParentsDrop && <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => (<TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setEditFormData({...editFormData, parents_status: s}); setEditParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity>))}</View>}
+              </View>
 
-            <Text style={styles.label}>Full Name</Text><TextInput style={styles.input} value={editFormData.full_name || ''} onChangeText={t=>setEditFormData({...editFormData, full_name: t})} />
-            <Text style={styles.label}>Father's Name</Text><TextInput style={styles.input} value={editFormData.father_name || ''} onChangeText={t=>setEditFormData({...editFormData, father_name: t})} />
-            <Text style={styles.label}>Mother's Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={editFormData.mother_name} onChangeText={(t) => setEditFormData({...editFormData, mother_name: t})} />
-            <Text style={styles.label}>Parents Status</Text>
-            <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditParentsDrop(!editParentsDrop)}><Text style={styles.dropdownBtnText}>{editFormData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
-            {editParentsDrop && <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map(s => <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, parents_status: s}); setEditParentsDrop(false);}}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity>)}</View>}
-            <Text style={styles.label}>Date of Birth (YYYY-MM-DD)</Text>
-            {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formattedDob} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} /> : <TextInput style={styles.input} value={formattedDob} onChangeText={t=>setEditFormData({...editFormData, dob: t})} />}
-            <Text style={styles.label}>Blood Group</Text>
-            <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditBloodDrop(!editBloodDrop)}><Text style={styles.dropdownBtnText}>{editFormData.blood_group || 'SELECT BLOOD GROUP'}</Text></TouchableOpacity>
-            {editBloodDrop && <View style={styles.dropdownList}>{BLOOD_GROUPS.map(bg => <TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, blood_group: bg}); setEditBloodDrop(false);}}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>)}</View>}
-            
-            <Text style={styles.label}>Phone Number</Text><TextInput style={styles.input} value={editFormData.phone_number || ''} onChangeText={t=>setEditFormData({...editFormData, phone_number: t})} keyboardType="numeric" />
-            <Text style={styles.label}>WhatsApp Number</Text><TextInput style={styles.input} value={editFormData.whatsapp_number || ''} onChangeText={t=>setEditFormData({...editFormData, whatsapp_number: t})} keyboardType="numeric" />
-            <Text style={styles.label}>Email</Text><TextInput style={styles.input} value={editFormData.email || ''} onChangeText={t=>setEditFormData({...editFormData, email: t})} />
-            <Text style={styles.label}>Native Place</Text>
-            <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditNativeDrop(!editNativeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.native_place || 'SELECT NATIVE PLACE'}</Text></TouchableOpacity>
-            {editNativeDrop && <View style={styles.dropdownList}>{NATIVE_PLACES.map(np => <TouchableOpacity key={np} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, native_place: np}); setEditNativeDrop(false);}}><Text style={styles.dropdownItemText}>{np}</Text></TouchableOpacity>)}</View>}
-            <Text style={styles.label}>Current Location</Text><TextInput style={styles.input} value={editFormData.current_location || ''} onChangeText={t=>setEditFormData({...editFormData, current_location: t})} />
-            <Text style={styles.label}>Full Address</Text><TextInput style={[styles.input, {height: 60}]} multiline value={editFormData.address || ''} onChangeText={t=>setEditFormData({...editFormData, address: t})} />
-            
-            {currentUser.role === 'MEMBER' && (
-               <View>
-                 <Text style={styles.label}>Education Category</Text><TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'SELECT EDUCATION'}</Text></TouchableOpacity>
-                 {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
-                 <Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} />
-                 <Text style={styles.label}>Occupation / Job</Text><TextInput style={styles.input} value={editFormData.occupation || ''} onChangeText={t=>setEditFormData({...editFormData, occupation: t})} />
-               </View>
-            )}
+              <View style={wrapStyle}><Text style={styles.label}>Gender</Text>
+              <TouchableOpacity style={dropStyle} onPress={() => setEditGenderDrop(!editGenderDrop)}><Text style={styles.dropdownBtnText}>{editFormData.gender || 'Select Gender'}</Text></TouchableOpacity>
+              {editGenderDrop && <View style={styles.dropdownList}>{GENDERS.map(g => <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, gender: g}); setEditGenderDrop(false);}}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>)}</View>}
+              </View>
 
+              <View style={wrapStyle}><Text style={styles.label}>Date of Birth</Text>
+              {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formattedDob} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} /> : <TextInput style={styles.input} value={formattedDob} onChangeText={t=>setEditFormData({...editFormData, dob: t})} placeholder="YYYY-MM-DD" />}
+              </View>
 
-            {currentUser.role === 'STUDENT' && (
-               <View>
-                 <Text style={styles.label}>Class / Grade</Text><TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditClassDrop(!editClassDrop)}><Text style={styles.dropdownBtnText}>{editFormData.class_grade || 'SELECT CLASS'}</Text></TouchableOpacity>
-                 {editClassDrop && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map(c => <TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, class_grade: c}); setEditClassDrop(false);}}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>)}</ScrollView></View>}
-                 <Text style={styles.label}>School / College Name</Text><TextInput style={styles.input} value={editFormData.school_name || ''} onChangeText={t=>setEditFormData({...editFormData, school_name: t})} />
-                 <Text style={styles.label}>Institution Type</Text><TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditSchoolTypeDrop(!editSchoolTypeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.school_type || 'SELECT TYPE'}</Text></TouchableOpacity>
-                 {editSchoolTypeDrop && <View style={styles.dropdownList}>{(isCollegeEditUser ? COLLEGE_TYPES : SCHOOL_TYPES).map(st => <TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, school_type: st}); setEditSchoolTypeDrop(false);}}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>)}</View>}
-                 <Text style={styles.label}>Medium of Instruction</Text><TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditMediumDrop(!editMediumDrop)}><Text style={styles.dropdownBtnText}>{editFormData.medium_of_instruction || 'SELECT MEDIUM'}</Text></TouchableOpacity>
-                 {editMediumDrop && <View style={styles.dropdownList}>{MEDIUMS.map(md => <TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, medium_of_instruction: md}); setEditMediumDrop(false);}}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>)}</View>}
-                 {isCollegeEditUser && (
-                   <View>
-                     <Text style={styles.label}>Educational Category</Text><TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'SELECT EDUCATION'}</Text></TouchableOpacity>
-                     {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
-                     <Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} />
-                   </View>
-                 )}
-               </View>
-            )}
+              <View style={wrapStyle}><Text style={styles.label}>Blood Group</Text>
+              <TouchableOpacity style={dropStyle} onPress={() => setEditBloodDrop(!editBloodDrop)}><Text style={styles.dropdownBtnText}>{editFormData.blood_group || 'Select Blood Group'}</Text></TouchableOpacity>
+              {editBloodDrop && <View style={styles.dropdownList}>{BLOOD_GROUPS.map(bg => <TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, blood_group: bg}); setEditBloodDrop(false);}}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>)}</View>}
+              </View>
 
+              <View style={wrapStyle}><Text style={styles.label}>Aadhaar Number</Text>
+              <TextInput style={styles.input} value={displayAadhaar} onChangeText={t=>setEditFormData({...editFormData, aadhaar_number: t})} keyboardType="numeric" maxLength={12} placeholder="Aadhaar Number" />
+              </View>
+            </View>
 
-            <Text style={styles.label}>Islamic Studies</Text>
-            <View style={{flexDirection: 'row', gap: 10, marginBottom: 16}}>
+            <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Contact & Location</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+              <View style={wrapStyle}><Text style={styles.label}>Phone Number</Text><TextInput style={styles.input} value={editFormData.phone_number || ''} onChangeText={t=>setEditFormData({...editFormData, phone_number: t})} keyboardType="numeric" /></View>
+              <View style={wrapStyle}><Text style={styles.label}>WhatsApp Number</Text><TextInput style={styles.input} value={editFormData.whatsapp_number || ''} onChangeText={t=>setEditFormData({...editFormData, whatsapp_number: t})} keyboardType="numeric" /></View>
+              <View style={wrapStyle}><Text style={styles.label}>Email</Text><TextInput style={styles.input} value={editFormData.email || ''} onChangeText={t=>setEditFormData({...editFormData, email: t})} /></View>
+
+              <View style={wrapStyle}><Text style={styles.label}>Native Place</Text>
+              <TouchableOpacity style={dropStyle} onPress={() => setEditNativeDrop(!editNativeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.native_place || 'Select Native Place'}</Text></TouchableOpacity>
+              {editNativeDrop && <View style={styles.dropdownList}>{NATIVE_PLACES.map(np => <TouchableOpacity key={np} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, native_place: np}); setEditNativeDrop(false);}}><Text style={styles.dropdownItemText}>{np}</Text></TouchableOpacity>)}</View>}
+              </View>
+
+              <View style={wrapStyle}><Text style={styles.label}>Current Location</Text><TextInput style={styles.input} value={editFormData.current_location || ''} onChangeText={t=>setEditFormData({...editFormData, current_location: t})} /></View>
+              <View style={{width: '100%'}}><Text style={styles.label}>Full Address</Text><TextInput style={[styles.input, {height: 60}]} multiline value={editFormData.address || ''} onChangeText={t=>setEditFormData({...editFormData, address: t})} /></View>
+            </View>
+
+            <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Education & Occupation</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+              {editFormData.role === 'MEMBER' && (
+                <>
+                  <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Education'}</Text></TouchableOpacity>
+                  {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
+                  </View>
+                  <View style={wrapStyle}><Text style={styles.label}>Course / Major</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} /></View>
+                  <View style={wrapStyle}><Text style={styles.label}>Occupation / Job</Text><TextInput style={styles.input} value={editFormData.occupation || ''} onChangeText={t=>setEditFormData({...editFormData, occupation: t})} /></View>
+                </>
+              )}
+              {editFormData.role === 'STUDENT' && (
+                <>
+                  <View style={wrapStyle}><Text style={styles.label}>Class / Grade</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setEditClassDrop(!editClassDrop)}><Text style={styles.dropdownBtnText}>{editFormData.class_grade || 'Select Class / Grade'}</Text></TouchableOpacity>
+                  {editClassDrop && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map(c => <TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, class_grade: c}); setEditClassDrop(false);}}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>)}</ScrollView></View>}
+                  </View>
+
+                  <View style={wrapStyle}><Text style={styles.label}>School / College Name</Text><TextInput style={styles.input} value={editFormData.school_name || ''} onChangeText={t=>setEditFormData({...editFormData, school_name: t})} /></View>
+
+                  <View style={wrapStyle}><Text style={styles.label}>Institution Type</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setEditSchoolTypeDrop(!editSchoolTypeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.school_type || 'Select Institution Type'}</Text></TouchableOpacity>
+                  {editSchoolTypeDrop && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map(st => <TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, school_type: st}); setEditSchoolTypeDrop(false);}}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>)}</View>}
+                  </View>
+
+                  <View style={wrapStyle}><Text style={styles.label}>Institution Location</Text><TextInput style={styles.input} value={editFormData.school_location || ''} onChangeText={t=>setEditFormData({...editFormData, school_location: t})} /></View>
+
+                  <View style={wrapStyle}><Text style={styles.label}>Medium of Instruction</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setEditMediumDrop(!editMediumDrop)}><Text style={styles.dropdownBtnText}>{editFormData.medium_of_instruction || 'Select Medium'}</Text></TouchableOpacity>
+                  {editMediumDrop && <View style={styles.dropdownList}>{MEDIUMS.map(md => <TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, medium_of_instruction: md}); setEditMediumDrop(false);}}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>)}</View>}
+                  </View>
+
+                  {isCollegeEdit && (
+                    <>
+                      <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                      <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Category'}</Text></TouchableOpacity>
+                      {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
+                      </View>
+                      <View style={wrapStyle}><Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} /></View>
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+
+            <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Islamic Studies</Text>
+            <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
                <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
                <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
             </View>
-            
             {editFormData.islamic_studies === 'YES' && (
-              <View style={{padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
-                <Text style={styles.label}>Islamic Qualification</Text>
-                <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditIslamicDrop(!editIslamicDrop)}><Text style={styles.dropdownBtnText}>{editFormData.islamic_qualification || 'SELECT QUALIFICATION'}</Text></TouchableOpacity>
+              <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0'}}>
+                <View style={wrapStyle}><Text style={styles.label}>Qualification</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setEditIslamicDrop(!editIslamicDrop)}><Text style={styles.dropdownBtnText}>{editFormData.islamic_qualification || 'Select Qualification'}</Text></TouchableOpacity>
                 {editIslamicDrop && <View style={styles.dropdownList}>{ISLAMIC_QUALS.map(iq => <TouchableOpacity key={iq} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, islamic_qualification: iq}); setEditIslamicDrop(false);}}><Text style={styles.dropdownItemText}>{iq}</Text></TouchableOpacity>)}</View>}
-                <Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} value={editFormData.madrasa_name || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_name: t})} />
-                <Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} value={editFormData.madrasa_location || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_location: t})} />
+                </View>
+                {editFormData.islamic_qualification === 'OTHERS' && (
+                  <View style={wrapStyle}><Text style={styles.label}>Specify Other</Text><TextInput style={styles.input} value={editFormData.islamic_qualification || ''} onChangeText={t=>setEditFormData({...editFormData, islamic_qualification: t})} /></View>
+                )}
+                <View style={wrapStyle}><Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} value={editFormData.madrasa_name || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_name: t})} /></View>
+                <View style={wrapStyle}><Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} value={editFormData.madrasa_location || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_location: t})} /></View>
               </View>
             )}
-            
-            <TouchableOpacity style={styles.button} onPress={saveEditedProfile} disabled={isSubmitting}>{isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Save Profile Data</Text>}</TouchableOpacity>
+
+            {/* SAVE BUTTON AT BOTTOM */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 32 }}>
+              <TouchableOpacity style={[styles.neatBtnSuccess, { paddingHorizontal: 32, paddingVertical: 14 }]} onPress={saveEditedProfile} disabled={isSubmitting}>
+                {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={[styles.neatBtnText, { fontSize: 15 }]}>💾 Save Profile Data</Text>}
+              </TouchableOpacity>
+            </View>
+
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -638,15 +750,13 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
 
 
         <View style={{ flex: 1, minWidth: 250 }}>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: '#004085', letterSpacing: -0.5 }}>{currentUser?.full_name}</Text>
-          <Text style={{ fontSize: 15, color: '#64748B', marginTop: 4, fontWeight: '600' }}>
-            Blood: {currentUser?.blood_group}  •  {currentUser?.phone_number}  •  {currentUser?.native_place}
+          <Text style={{ fontSize: 28, fontWeight: '900', color: '#004085', letterSpacing: -0.5, marginBottom: 2 }}>{currentUser?.full_name}</Text>
+          <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>S/O {currentUser?.father_name || 'N/A'}</Text>
+          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: '500' }}>
+            ID: {currentUser?.official_id}  •  🩸 {currentUser?.blood_group || '-'}  •  📞 {currentUser?.phone_number}  •  📍 {currentUser?.native_place}
           </Text>
           
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => setShowIdCardModal(true)}>
-              <Text style={styles.neatBtnText}>🪪 View ID Card</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.neatBtnDark} onPress={() => {setEditFormData(currentUser); setIsEditingProfile(true);}}>
               <Text style={styles.neatBtnTextDark}>✏️ Edit Profile</Text>
             </TouchableOpacity>
@@ -739,6 +849,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [primaryUpi, setPrimaryUpi] = useState('');
   const [secondaryUpi, setSecondaryUpi] = useState('');
   const [initialAmount, setInitialAmount] = useState('0');
+  const [configModalPassword, setConfigModalPassword] = useState('');
 
 
   // --- NEW EXPENSE STATE ---
@@ -841,18 +952,53 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   }, [activeTab]);
 
 
-  // Calculations
+  // Calculations (Excluding Core Admin)
   const stats = { roles: {}, bloodGroups: {}, marital: {}, education: {}, native: {}, gender: {} };
   const incrementStat = (cat, val, role) => { if (!val) return; if (!stats[cat][val]) stats[cat][val] = { total: 0, M: 0, S: 0 }; stats[cat][val].total += 1; if (role === 'STUDENT') stats[cat][val].S += 1; else stats[cat][val].M += 1; };
-  directory.filter(u => !u.is_core_admin).forEach(u => { stats.roles[u.role] = (stats.roles[u.role] || 0) + 1; incrementStat('bloodGroups', u.blood_group, u.role); incrementStat('marital', u.marital_status, u.role); incrementStat('education', u.educational_qualification, u.role); incrementStat('native', u.native_place, u.role); incrementStat('gender', u.gender, u.role); });
+  
+  // EXCLUDE CORE ADMIN FROM STATS
+  directory.filter(u => !u.is_core_admin).forEach(u => { 
+    stats.roles[u.role] = (stats.roles[u.role] || 0) + 1; 
+    incrementStat('bloodGroups', u.blood_group, u.role); 
+    incrementStat('marital', u.marital_status, u.role); 
+    incrementStat('education', u.educational_qualification, u.role); 
+    incrementStat('native', u.native_place, u.role); 
+    incrementStat('gender', u.gender, u.role); 
+  });
 
 
-  const renderSplitBlocks = (statObj) => Object.entries(statObj).sort((a,b)=>b[1].total-a[1].total).map(([key, val]) => (
-    <View key={key} style={styles.statChip}><View style={{flexDirection: 'row', justifyContent: 'space-between'}}><Text style={styles.statChipKey} numberOfLines={1}>{key}</Text><Text style={styles.statChipVal}>{val.total}</Text></View><Text style={{ fontSize: 10, color: '#64748B', marginTop: 4, fontWeight: 'bold' }}>Mem: {val.M} | Stu: {val.S}</Text></View>
-  ));
+  const renderBarChart = (statObj, barColor) => {
+    const entries = Object.entries(statObj).sort((a, b) => b[1].total - a[1].total);
+    if (entries.length === 0) return <Text style={{ color: '#64748B', fontSize: 13 }}>No data available.</Text>;
+    
+    // Find the highest number to scale the graph bars correctly
+    const maxVal = Math.max(...entries.map(e => e[1].total));
+    
+    return (
+      <View style={{ width: '100%', marginTop: 8 }}>
+        {entries.map(([key, val]) => {
+          const fillWidth = Math.max((val.total / maxVal) * 100, 2); // Min 2% so empty bars still show slightly
+          return (
+            <View key={key} style={{ marginBottom: 16 }}>
+               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E293B', flex: 1, paddingRight: 10 }} numberOfLines={1}>{key}</Text>
+                 <Text style={{ fontSize: 14, fontWeight: '800', color: '#004085' }}>{val.total}</Text>
+               </View>
+               <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
+                 <View style={{ height: '100%', width: `${fillWidth}%`, backgroundColor: barColor || '#3B82F6', borderRadius: 4 }} />
+               </View>
+               <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6, fontWeight: '500' }}>Members: {val.M}   •   Students: {val.S}</Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
 
 
+  // EXCLUDE CORE ADMIN FROM DIRECTORY LISTING
   const filteredDirectory = directory
+  .filter(u => !u.is_core_admin) // <--- REMOVES CORE ADMIN ENTIRELY
   .filter(u => activeTab === 'STUDENTS' ? u.role === 'STUDENT' : (u.role === 'MEMBER' || u.role === 'ADMIN'))
   .filter(u => !searchQuery || u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(searchQuery.toLowerCase()))
   .filter(u => !filters.status || u.membership_status === filters.status).filter(u => !filters.blood || u.blood_group === filters.blood).filter(u => !filters.gender || u.gender === filters.gender).filter(u => !filters.edu || u.educational_qualification === filters.edu).filter(u => !filters.islamic || u.islamic_qualification === filters.islamic).filter(u => !filters.native || u.native_place === filters.native).filter(u => !filters.marital || u.marital_status === filters.marital);
@@ -921,10 +1067,11 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   };
 
   const saveEditedUser = async () => {
+    setIsSubmitting(true);
     try {
       await updateDoc(doc(db, 'members', selectedDetailUser.official_id), editFormData);
       alert('Details updated in Firebase!'); setIsEditingUser(false); setSelectedDetailUser(null); fetchData();
-    } catch (e) { alert('Error updating user: ' + e.message); }
+    } catch (e) { alert('Error updating user: ' + e.message); } finally { setIsSubmitting(false); }
   };
 
   const resetUserPasswordAdmin = async () => {
@@ -985,6 +1132,74 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
     } catch(e) { alert("Failed to generate PDF"); }
   };
 
+  const handleMasterDatabaseReset = async () => {
+    // Prompt the admin for their password before executing the wipe
+    if (Platform.OS === 'web') {
+      const enteredPass = window.prompt("⚠️ DANGER: Full Database Reset\n\nEnter your admin password to confirm wiping all users, transactions, and campaigns:");
+      if (!enteredPass) return;
+      
+      try {
+        const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
+        if (!adminSnap.exists() || adminSnap.data().password !== enteredPass) {
+           return alert('Incorrect admin password! Reset aborted.');
+        }
+        executeWipe();
+      } catch(e) { alert('Verification failed: ' + e.message); }
+    } else {
+      // For mobile, fall back to default prompt
+      Alert.prompt(
+        "Admin Password Required",
+        "Enter your password to confirm wiping the database:",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Confirm", style: "destructive", onPress: async (enteredPass) => {
+             try {
+               const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
+               if (!adminSnap.exists() || adminSnap.data().password !== enteredPass) {
+                  return alert('Incorrect admin password!');
+               }
+               executeWipe();
+             } catch(e) { alert('Verification failed'); }
+          }}
+        ],
+        "secure-text"
+      );
+    }
+  };
+
+  const executeWipe = async () => {
+    setIsSubmitting(true);
+    try {
+      const membersSnap = await getDocs(collection(db, 'members'));
+      let deletedMembers = 0;
+      for (const docSnap of membersSnap.docs) {
+        if (docSnap.data().is_core_admin === true) continue;
+        await deleteDoc(doc(db, 'members', docSnap.id));
+        deletedMembers++;
+      }
+
+      const txnsSnap = await getDocs(collection(db, 'transactions'));
+      let deletedTxns = 0;
+      for (const docSnap of txnsSnap.docs) {
+        await deleteDoc(doc(db, 'transactions', docSnap.id));
+        deletedTxns++;
+      }
+
+      const campsSnap = await getDocs(collection(db, 'campaigns'));
+      let deletedCamps = 0;
+      for (const docSnap of campsSnap.docs) {
+        await deleteDoc(doc(db, 'campaigns', docSnap.id));
+        deletedCamps++;
+      }
+
+      alert(`Reset Complete!\n• Deleted Members/Students: ${deletedMembers}\n• Deleted Transactions: ${deletedTxns}\n• Deleted Campaigns: ${deletedCamps}`);
+      fetchData();
+    } catch (error) {
+      alert("Reset failed: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const renderUserDetail = () => {
     const u = selectedDetailUser;
@@ -992,151 +1207,165 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
     const age = u.dob ? (new Date().getFullYear() - new Date(u.dob).getFullYear()) : 'Unknown';
 
 
-    if (showIdCardModal) {
-      return (
-        <View style={{alignItems: 'center', marginBottom: 20}}>
-          <TouchableOpacity style={[styles.neatBtnDark, {alignSelf: 'flex-start', marginBottom: 20}]} onPress={() => setShowIdCardModal(false)}><Text style={styles.neatBtnTextDark}>← Back to Profile</Text></TouchableOpacity>
-          <View style={styles.idCardContainer}>
-             <View style={{zIndex: 1}}>
-                 <View style={styles.idCardHeader}>
-                    <Text style={{color: 'white', fontWeight: 'bold', fontSize: 22, textAlign: 'center', letterSpacing: 1, marginBottom: 2}}>HIYWA</Text>
-                    <Text style={{color: 'white', fontWeight: 'bold', fontSize: 11, textAlign: 'center'}}>Hidhayathul Islam Youth Welfare Trust</Text>
-                 </View>
-                 <View style={{padding: 20, alignItems: 'center'}}>
-                    {u.profile_photo ? <Image source={{uri: u.profile_photo}} style={styles.idCardPhoto} /> : <View style={[styles.idCardPhoto, {backgroundColor: '#ccc', justifyContent:'center', alignItems:'center'}]}><Text style={{fontSize:40}}>👤</Text></View>}
-                    <Text style={{fontSize: 22, fontWeight: '900', color: '#004085', marginTop: 10}}>{u.full_name}</Text>
-                    <Text style={{fontSize: 16, color: '#64748B', fontWeight: '800', marginTop: 5}}>ID: {u.official_id}</Text>
-                    <View style={{marginTop: 15, width: '100%', alignItems: 'flex-start'}}>
-                       <Text style={{fontSize: 13, color: '#475569', marginBottom: 6}}><b>Role:</b> {u.role}</Text>
-                       <Text style={{fontSize: 13, color: '#475569', marginBottom: 6}}><b>Age / Blood:</b> {age} / {u.blood_group || 'N/A'}</Text>
-                       <Text style={{fontSize: 13, color: '#475569', marginBottom: 6}}><b>Phone:</b> {u.phone_number}</Text>
-                    </View>
-                 </View>
-             </View>
-          </View>
-          <TouchableOpacity style={[styles.button, {marginTop: 20, width: 320}]} onPress={() => printIDCard(u)}><Text style={styles.buttonText}>🖨️ Download / Share</Text></TouchableOpacity>
-        </View>
-      );
-    }
-
-
     if (isEditingUser) {
       const formattedDob = editFormData.dob ? (() => { try { const d = new Date(editFormData.dob); return isNaN(d) ? editFormData.dob : d.toISOString().split('T')[0]; } catch(e){ return editFormData.dob; }})() : '';
       const displayAadhaar = editFormData.aadhaar_number || editFormData.aadhar_number || '';
       const isCollegeEdit = ['UG - BACHELORS', 'PG - MASTERS', 'PHD', 'ITI / DIPLOMA'].includes(editFormData.class_grade);
 
+      // ALERT LOGIC FOR BACK BUTTON
+      const handleCancelEdit = () => {
+        confirmAction(
+          "Discard Changes?", 
+          "Are you sure you want to go back? Any unsaved changes will be lost.", 
+          () => setIsEditingUser(false), 
+          "Discard", 
+          true
+        );
+      };
+
+      // RESPONSIVE GRID & SHADE STYLES
+      const wrapStyle = { flex: 1, minWidth: 260 }; 
+      const dropStyle = [styles.dropdownBtn, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }];
 
       return (
         <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Edit Details for {u.full_name}</Text>
-          <Text style={styles.label}>Personal Details</Text>
-          <Text style={styles.filterLabel}>Full Name</Text><TextInput style={styles.input} value={editFormData.full_name || ''} onChangeText={t=>setEditFormData({...editFormData, full_name: t})} />
-          <Text style={styles.filterLabel}>Father's Name</Text><TextInput style={styles.input} value={editFormData.father_name || ''} onChangeText={t=>setEditFormData({...editFormData, father_name: t})} />
-          <Text style={styles.label}>Mother's Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={editFormData.mother_name} onChangeText={(t) => setEditFormData({...editFormData, mother_name: t})} />
-          
-          <Text style={styles.label}>Parents Status</Text>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditParentsDrop(!editParentsDrop)}><Text style={styles.dropdownBtnText}>{editFormData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
-          {editParentsDrop && <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => (<TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setEditFormData({...editFormData, parents_status: s}); setEditParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity>))}</View>}
-          
-          <Text style={styles.filterLabel}>Gender</Text>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditGenderDrop(!editGenderDrop)}><Text style={styles.dropdownBtnText}>{editFormData.gender || 'Select Gender'}</Text></TouchableOpacity>
-          {editGenderDrop && <View style={styles.dropdownList}>{GENDERS.map(g => <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, gender: g}); setEditGenderDrop(false);}}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>)}</View>}
-          
-          <Text style={styles.filterLabel}>Date of Birth</Text>
-          {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formattedDob} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} /> : <TextInput style={styles.input} value={formattedDob} onChangeText={t=>setEditFormData({...editFormData, dob: t})} placeholder="DOB (YYYY-MM-DD)" />}
-          
-          <Text style={styles.filterLabel}>Blood Group</Text>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditBloodDrop(!editBloodDrop)}><Text style={styles.dropdownBtnText}>{editFormData.blood_group || 'Select Blood Group'}</Text></TouchableOpacity>
-          {editBloodDrop && <View style={styles.dropdownList}>{BLOOD_GROUPS.map(bg => <TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, blood_group: bg}); setEditBloodDrop(false);}}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>)}</View>}
-          
-          <Text style={styles.filterLabel}>Marital Status</Text>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditMaritalDrop(!editMaritalDrop)}><Text style={styles.dropdownBtnText}>{editFormData.marital_status || 'Select Marital Status'}</Text></TouchableOpacity>
-          {editMaritalDrop && <View style={styles.dropdownList}>{MARITAL_STATUS.map(ms => <TouchableOpacity key={ms} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, marital_status: ms}); setEditMaritalDrop(false);}}><Text style={styles.dropdownItemText}>{ms}</Text></TouchableOpacity>)}</View>}
-          
-          <Text style={styles.filterLabel}>Aadhaar Number (12 Digits)</Text>
-          <TextInput style={styles.input} value={displayAadhaar} onChangeText={t=>setEditFormData({...editFormData, aadhaar_number: t})} keyboardType="numeric" maxLength={12} placeholder="Aadhaar Number" />
-          
-          <Text style={styles.label}>Contact & Location</Text>
-          <Text style={styles.filterLabel}>Phone Number</Text><TextInput style={styles.input} value={editFormData.phone_number || ''} onChangeText={t=>setEditFormData({...editFormData, phone_number: t})} keyboardType="numeric" />
-          <Text style={styles.filterLabel}>WhatsApp Number</Text><TextInput style={styles.input} value={editFormData.whatsapp_number || ''} onChangeText={t=>setEditFormData({...editFormData, whatsapp_number: t})} keyboardType="numeric" />
-          <Text style={styles.filterLabel}>Email</Text><TextInput style={styles.input} value={editFormData.email || ''} onChangeText={t=>setEditFormData({...editFormData, email: t})} />
-          
-          <Text style={styles.filterLabel}>Native Place</Text>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditNativeDrop(!editNativeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.native_place || 'Select Native Place'}</Text></TouchableOpacity>
-          {editNativeDrop && <View style={styles.dropdownList}>{NATIVE_PLACES.map(np => <TouchableOpacity key={np} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, native_place: np}); setEditNativeDrop(false);}}><Text style={styles.dropdownItemText}>{np}</Text></TouchableOpacity>)}</View>}
-          
-          <Text style={styles.filterLabel}>Current Location</Text><TextInput style={styles.input} value={editFormData.current_location || ''} onChangeText={t=>setEditFormData({...editFormData, current_location: t})} />
-          <Text style={styles.filterLabel}>Full Address</Text><TextInput style={[styles.input, {height: 60}]} multiline value={editFormData.address || ''} onChangeText={t=>setEditFormData({...editFormData, address: t})} />
-          
-          <Text style={styles.label}>Education & Occupation</Text>
-          
-          {editFormData.role === 'MEMBER' && (
-             <View>
-               <Text style={styles.filterLabel}>Education Category</Text>
-               <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Education'}</Text></TouchableOpacity>
-               {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
-               <Text style={styles.filterLabel}>Course / Major</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} />
-               <Text style={styles.filterLabel}>Occupation / Job</Text><TextInput style={styles.input} value={editFormData.occupation || ''} onChangeText={t=>setEditFormData({...editFormData, occupation: t})} />
-             </View>
-          )}
+          {/* STANDARDIZED TOP ACTION BAR */}
+          <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}>
+            <TouchableOpacity style={styles.neatBtnDark} onPress={handleCancelEdit}>
+              <Text style={styles.neatBtnTextDark}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Edit {u.full_name}</Text>
+          </View>
 
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <TouchableOpacity onPress={() => uploadPhotoForUser(u.official_id)}>
+              {editFormData.profile_photo ? <Image source={{uri: editFormData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Photo</Text></View>}
+              <Text style={{color: '#004085', fontWeight: '800', marginTop: 8, textAlign: 'center'}}>Change Photo</Text>
+            </TouchableOpacity>
+          </View>
 
-          {editFormData.role === 'STUDENT' && (
-             <View>
-               <Text style={styles.filterLabel}>Class / Grade</Text>
-               <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditClassDrop(!editClassDrop)}><Text style={styles.dropdownBtnText}>{editFormData.class_grade || 'Select Class / Grade'}</Text></TouchableOpacity>
-               {editClassDrop && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map(c => <TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, class_grade: c}); setEditClassDrop(false);}}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>)}</ScrollView></View>}
-               
-               <Text style={styles.filterLabel}>School / College Name</Text><TextInput style={styles.input} value={editFormData.school_name || ''} onChangeText={t=>setEditFormData({...editFormData, school_name: t})} />
-               
-               <Text style={styles.filterLabel}>Institution Type</Text>
-               <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditSchoolTypeDrop(!editSchoolTypeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.school_type || 'Select Institution Type'}</Text></TouchableOpacity>
-               {editSchoolTypeDrop && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map(st => <TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, school_type: st}); setEditSchoolTypeDrop(false);}}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>)}</View>}
-               
-               <Text style={styles.filterLabel}>Institution Location</Text><TextInput style={styles.input} value={editFormData.school_location || ''} onChangeText={t=>setEditFormData({...editFormData, school_location: t})} />
-               
-               <Text style={styles.filterLabel}>Medium of Instruction</Text>
-               <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditMediumDrop(!editMediumDrop)}><Text style={styles.dropdownBtnText}>{editFormData.medium_of_instruction || 'Select Medium'}</Text></TouchableOpacity>
-               {editMediumDrop && <View style={styles.dropdownList}>{MEDIUMS.map(md => <TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, medium_of_instruction: md}); setEditMediumDrop(false);}}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>)}</View>}
+          <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 10}]}>Personal Details</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+            <View style={wrapStyle}><Text style={styles.label}>Full Name</Text><TextInput style={styles.input} value={editFormData.full_name || ''} onChangeText={t=>setEditFormData({...editFormData, full_name: t})} /></View>
+            <View style={wrapStyle}><Text style={styles.label}>Father's Name</Text><TextInput style={styles.input} value={editFormData.father_name || ''} onChangeText={t=>setEditFormData({...editFormData, father_name: t})} /></View>
+            <View style={wrapStyle}><Text style={styles.label}>Mother's Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={editFormData.mother_name || ''} onChangeText={t => setEditFormData({...editFormData, mother_name: t})} /></View>
+            
+            <View style={wrapStyle}><Text style={styles.label}>Parents Status</Text>
+            <TouchableOpacity style={dropStyle} onPress={() => setEditParentsDrop(!editParentsDrop)}><Text style={styles.dropdownBtnText}>{editFormData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
+            {editParentsDrop && <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => (<TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setEditFormData({...editFormData, parents_status: s}); setEditParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity>))}</View>}
+            </View>
 
+            <View style={wrapStyle}><Text style={styles.label}>Gender</Text>
+            <TouchableOpacity style={dropStyle} onPress={() => setEditGenderDrop(!editGenderDrop)}><Text style={styles.dropdownBtnText}>{editFormData.gender || 'Select Gender'}</Text></TouchableOpacity>
+            {editGenderDrop && <View style={styles.dropdownList}>{GENDERS.map(g => <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, gender: g}); setEditGenderDrop(false);}}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>)}</View>}
+            </View>
 
-               {isCollegeEdit && (
-                 <View>
-                   <Text style={styles.filterLabel}>Education Category</Text>
-                   <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Category'}</Text></TouchableOpacity>
-                   {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
-                   <Text style={styles.filterLabel}>Course / Major Details</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} />
-                 </View>
-               )}
-             </View>
-          )}
+            <View style={wrapStyle}><Text style={styles.label}>Date of Birth</Text>
+            {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formattedDob} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} /> : <TextInput style={styles.input} value={formattedDob} onChangeText={t=>setEditFormData({...editFormData, dob: t})} placeholder="YYYY-MM-DD" />}
+            </View>
 
+            <View style={wrapStyle}><Text style={styles.label}>Blood Group</Text>
+            <TouchableOpacity style={dropStyle} onPress={() => setEditBloodDrop(!editBloodDrop)}><Text style={styles.dropdownBtnText}>{editFormData.blood_group || 'Select Blood Group'}</Text></TouchableOpacity>
+            {editBloodDrop && <View style={styles.dropdownList}>{BLOOD_GROUPS.map(bg => <TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, blood_group: bg}); setEditBloodDrop(false);}}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>)}</View>}
+            </View>
 
-          <Text style={styles.label}>Islamic Studies</Text>
+            <View style={wrapStyle}><Text style={styles.label}>Marital Status</Text>
+            <TouchableOpacity style={dropStyle} onPress={() => setEditMaritalDrop(!editMaritalDrop)}><Text style={styles.dropdownBtnText}>{editFormData.marital_status || 'Select Marital Status'}</Text></TouchableOpacity>
+            {editMaritalDrop && <View style={styles.dropdownList}>{MARITAL_STATUS.map(ms => <TouchableOpacity key={ms} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, marital_status: ms}); setEditMaritalDrop(false);}}><Text style={styles.dropdownItemText}>{ms}</Text></TouchableOpacity>)}</View>}
+            </View>
+
+            <View style={wrapStyle}><Text style={styles.label}>Aadhaar Number</Text>
+            <TextInput style={styles.input} value={displayAadhaar} onChangeText={t=>setEditFormData({...editFormData, aadhaar_number: t})} keyboardType="numeric" maxLength={12} placeholder="Aadhaar Number" />
+            </View>
+          </View>
+
+          <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Contact & Location</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+            <View style={wrapStyle}><Text style={styles.label}>Phone Number</Text><TextInput style={styles.input} value={editFormData.phone_number || ''} onChangeText={t=>setEditFormData({...editFormData, phone_number: t})} keyboardType="numeric" /></View>
+            <View style={wrapStyle}><Text style={styles.label}>WhatsApp Number</Text><TextInput style={styles.input} value={editFormData.whatsapp_number || ''} onChangeText={t=>setEditFormData({...editFormData, whatsapp_number: t})} keyboardType="numeric" /></View>
+            <View style={wrapStyle}><Text style={styles.label}>Email</Text><TextInput style={styles.input} value={editFormData.email || ''} onChangeText={t=>setEditFormData({...editFormData, email: t})} /></View>
+
+            <View style={wrapStyle}><Text style={styles.label}>Native Place</Text>
+            <TouchableOpacity style={dropStyle} onPress={() => setEditNativeDrop(!editNativeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.native_place || 'Select Native Place'}</Text></TouchableOpacity>
+            {editNativeDrop && <View style={styles.dropdownList}>{NATIVE_PLACES.map(np => <TouchableOpacity key={np} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, native_place: np}); setEditNativeDrop(false);}}><Text style={styles.dropdownItemText}>{np}</Text></TouchableOpacity>)}</View>}
+            </View>
+
+            <View style={wrapStyle}><Text style={styles.label}>Current Location</Text><TextInput style={styles.input} value={editFormData.current_location || ''} onChangeText={t=>setEditFormData({...editFormData, current_location: t})} /></View>
+            <View style={{width: '100%'}}><Text style={styles.label}>Full Address</Text><TextInput style={[styles.input, {height: 60}]} multiline value={editFormData.address || ''} onChangeText={t=>setEditFormData({...editFormData, address: t})} /></View>
+          </View>
+
+          <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Education & Occupation</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+            {editFormData.role === 'MEMBER' && (
+              <>
+                <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Education'}</Text></TouchableOpacity>
+                {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
+                </View>
+                <View style={wrapStyle}><Text style={styles.label}>Course / Major</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} /></View>
+                <View style={wrapStyle}><Text style={styles.label}>Occupation / Job</Text><TextInput style={styles.input} value={editFormData.occupation || ''} onChangeText={t=>setEditFormData({...editFormData, occupation: t})} /></View>
+              </>
+            )}
+            {editFormData.role === 'STUDENT' && (
+              <>
+                <View style={wrapStyle}><Text style={styles.label}>Class / Grade</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setEditClassDrop(!editClassDrop)}><Text style={styles.dropdownBtnText}>{editFormData.class_grade || 'Select Class / Grade'}</Text></TouchableOpacity>
+                {editClassDrop && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map(c => <TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, class_grade: c}); setEditClassDrop(false);}}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>)}</ScrollView></View>}
+                </View>
+
+                <View style={wrapStyle}><Text style={styles.label}>School / College Name</Text><TextInput style={styles.input} value={editFormData.school_name || ''} onChangeText={t=>setEditFormData({...editFormData, school_name: t})} /></View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Institution Type</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setEditSchoolTypeDrop(!editSchoolTypeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.school_type || 'Select Institution Type'}</Text></TouchableOpacity>
+                {editSchoolTypeDrop && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map(st => <TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, school_type: st}); setEditSchoolTypeDrop(false);}}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>)}</View>}
+                </View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Institution Location</Text><TextInput style={styles.input} value={editFormData.school_location || ''} onChangeText={t=>setEditFormData({...editFormData, school_location: t})} /></View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Medium of Instruction</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setEditMediumDrop(!editMediumDrop)}><Text style={styles.dropdownBtnText}>{editFormData.medium_of_instruction || 'Select Medium'}</Text></TouchableOpacity>
+                {editMediumDrop && <View style={styles.dropdownList}>{MEDIUMS.map(md => <TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, medium_of_instruction: md}); setEditMediumDrop(false);}}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>)}</View>}
+                </View>
+
+                {isCollegeEdit && (
+                  <>
+                    <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Category'}</Text></TouchableOpacity>
+                    {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
+                    </View>
+                    <View style={wrapStyle}><Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} value={editFormData.course_details || ''} onChangeText={t=>setEditFormData({...editFormData, course_details: t})} /></View>
+                  </>
+                )}
+              </>
+            )}
+          </View>
+
+          <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Islamic Studies</Text>
           <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
              <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
              <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
           </View>
           {editFormData.islamic_studies === 'YES' && (
-            <View style={{padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
-              <Text style={styles.filterLabel}>Qualification</Text>
-              <TouchableOpacity style={styles.dropdownBtn} onPress={() => setEditIslamicDrop(!editIslamicDrop)}><Text style={styles.dropdownBtnText}>{editFormData.islamic_qualification || 'Select Qualification'}</Text></TouchableOpacity>
+            <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0'}}>
+              <View style={wrapStyle}><Text style={styles.label}>Qualification</Text>
+              <TouchableOpacity style={dropStyle} onPress={() => setEditIslamicDrop(!editIslamicDrop)}><Text style={styles.dropdownBtnText}>{editFormData.islamic_qualification || 'Select Qualification'}</Text></TouchableOpacity>
               {editIslamicDrop && <View style={styles.dropdownList}>{ISLAMIC_QUALS.map(iq => <TouchableOpacity key={iq} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, islamic_qualification: iq}); setEditIslamicDrop(false);}}><Text style={styles.dropdownItemText}>{iq}</Text></TouchableOpacity>)}</View>}
-              
+              </View>
               {editFormData.islamic_qualification === 'OTHERS' && (
-                <View><Text style={styles.filterLabel}>Specify Other</Text><TextInput style={styles.input} value={editFormData.islamic_qualification || ''} onChangeText={t=>setEditFormData({...editFormData, islamic_qualification: t})} /></View>
+                <View style={wrapStyle}><Text style={styles.label}>Specify Other</Text><TextInput style={styles.input} value={editFormData.islamic_qualification || ''} onChangeText={t=>setEditFormData({...editFormData, islamic_qualification: t})} /></View>
               )}
-              
-              <Text style={styles.filterLabel}>Madrasa Name</Text><TextInput style={styles.input} value={editFormData.madrasa_name || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_name: t})} />
-              <Text style={styles.filterLabel}>Madrasa Location</Text><TextInput style={styles.input} value={editFormData.madrasa_location || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_location: t})} />
+              <View style={wrapStyle}><Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} value={editFormData.madrasa_name || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_name: t})} /></View>
+              <View style={wrapStyle}><Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} value={editFormData.madrasa_location || ''} onChangeText={t=>setEditFormData({...editFormData, madrasa_location: t})} /></View>
             </View>
           )}
 
-
-          <View style={{flexDirection: 'row', justifyContent: 'flex-end', gap: 10}}>
-             <TouchableOpacity style={styles.neatBtnDark} onPress={() => setIsEditingUser(false)}><Text style={styles.neatBtnTextDark}>Cancel</Text></TouchableOpacity>
-             <TouchableOpacity style={styles.neatBtnSuccess} onPress={saveEditedUser}><Text style={styles.neatBtnText}>💾 Save All Details</Text></TouchableOpacity>
+          {/* SAVE BUTTON AT BOTTOM */}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 32 }}>
+              <TouchableOpacity style={[styles.neatBtnSuccess, { paddingHorizontal: 32, paddingVertical: 14 }]} onPress={saveEditedUser} disabled={isSubmitting}>
+                {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={[styles.neatBtnText, { fontSize: 15 }]}>💾 Save All Details</Text>}
+              </TouchableOpacity>
           </View>
+
         </View>
       );
     }
@@ -1144,12 +1373,14 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
     return (
       <View style={styles.formCard}>
-        <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20}}>
-          <TouchableOpacity style={styles.neatBtnDark} onPress={() => setSelectedDetailUser(null)}><Text style={styles.neatBtnTextDark}>← Back to List</Text></TouchableOpacity>
-          <View style={{flexDirection: 'row', gap: 10}}>
-            <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => setShowIdCardModal(true)}><Text style={styles.neatBtnText}>🪪 ID Card</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => {setEditFormData(u); setIsEditingUser(true);}}><Text style={styles.neatBtnText}>✏️ Edit Profile</Text></TouchableOpacity>
-          </View>
+        {/* STANDARDIZED TOP ACTION BAR */}
+        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0'}}>
+          <TouchableOpacity style={styles.neatBtnDark} onPress={() => setSelectedDetailUser(null)}>
+            <Text style={styles.neatBtnTextDark}>← Back to List</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => {setEditFormData(u); setIsEditingUser(true);}}>
+            <Text style={styles.neatBtnText}>✏️ Edit Profile</Text>
+          </TouchableOpacity>
         </View>
 
 
@@ -1161,8 +1392,9 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
 
           <View style={{flex: 1, minWidth: 250}}>
-             <Text style={{fontSize: 28, fontWeight: '900', color: '#004085'}}>{u.full_name} {u.is_core_admin && '👑'} {isPromotedSubAdmin && '⭐'}</Text>
-             <Text style={{fontSize: 16, color: '#64748B', marginBottom: 16, fontWeight: '700'}}>Official ID: <Text style={{fontWeight: '900', color: '#004085'}}>{u.official_id}</Text></Text>
+             <Text style={{fontSize: 28, fontWeight: '900', color: '#004085', marginBottom: 2}}>{u.full_name} {u.is_core_admin && '👑'} {isPromotedSubAdmin && '⭐'}</Text>
+             <Text style={{fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4}}>S/O {u.father_name || 'N/A'}</Text>
+             <Text style={{fontSize: 13, color: '#64748B', marginBottom: 16, fontWeight: '500'}}>Official ID: <Text style={{fontWeight: '800', color: '#004085'}}>{u.official_id}</Text></Text>
              
              <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20}}>
                <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Status: {u.membership_status}</Text></View>
@@ -1218,43 +1450,60 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             <View>
               <View style={styles.statGrid}>
                 <View style={styles.statBoxLarge}><Text style={styles.statLargeVal}>{(directory.filter(u=>(u.role==='MEMBER'||u.role==='ADMIN') && !u.is_core_admin).length)}</Text><Text style={styles.statLargeKey}>Total Members</Text></View>
-                <View style={styles.statBoxLarge}><Text style={styles.statLargeVal}>{directory.filter(u=>u.role==='STUDENT').length}</Text><Text style={styles.statLargeKey}>Total Students</Text></View>
+                <View style={[styles.statBoxLarge, {backgroundColor: '#3B82F6'}]}><Text style={styles.statLargeVal}>{directory.filter(u=>u.role==='STUDENT').length}</Text><Text style={styles.statLargeKey}>Total Students</Text></View>
                 <View style={[styles.statBoxLarge, { backgroundColor: '#10B981' }]}><Text style={styles.statLargeVal}>{directory.filter(u=>!u.is_core_admin).length}</Text><Text style={styles.statLargeKey}>Grand Total</Text></View>
               </View>
-              <View style={[styles.formCard, {marginTop: 24}]}><Text style={styles.sectionTitle}>Native Place Distribution</Text><View style={styles.statWrapContainer}>{renderSplitBlocks(stats.native)}</View></View>
-              <View style={styles.formCard}><Text style={styles.sectionTitle}>Gender Distribution</Text><View style={styles.statWrapContainer}>{renderSplitBlocks(stats.gender)}</View></View>
-              <View style={styles.formCard}><Text style={styles.sectionTitle}>Blood Groups</Text><View style={styles.statWrapContainer}>{renderSplitBlocks(stats.bloodGroups)}</View></View>
-              <View style={styles.formCard}><Text style={styles.sectionTitle}>Educational Qualifications</Text><View style={styles.statWrapContainer}>{renderSplitBlocks(stats.education)}</View></View>
+
+              {/* RESPONSIVE GRAPH DASHBOARD */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 24, width: '100%' }}>
+                <View style={styles.chartCard}>
+                  <Text style={styles.sectionTitle}>📍 Native Place</Text>
+                  {renderBarChart(stats.native, '#0EA5E9')}
+                </View>
+                <View style={styles.chartCard}>
+                  <Text style={styles.sectionTitle}>🚻 Gender</Text>
+                  {renderBarChart(stats.gender, '#8B5CF6')}
+                </View>
+                <View style={styles.chartCard}>
+                  <Text style={styles.sectionTitle}>🩸 Blood Groups</Text>
+                  {renderBarChart(stats.bloodGroups, '#EF4444')}
+                </View>
+                <View style={styles.chartCard}>
+                  <Text style={styles.sectionTitle}>🎓 Education</Text>
+                  {renderBarChart(stats.education, '#F59E0B')}
+                </View>
+              </View>
             </View>
           )}
 
 
           {(activeTab === 'USERS' || activeTab === 'STUDENTS') && (
             <>
-              {/* Add Member / Export Action Row */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <TouchableOpacity style={styles.neatBtnSuccess} onPress={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')}>
-                  <Text style={styles.neatBtnText}>+ Add {activeTab === 'STUDENTS' ? 'Student' : 'Member'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.neatBtnDark} onPress={() => downloadCSV("Official ID,Role,Full Name,Phone,Gender,Blood Group,Native Place\n" + filteredDirectory.map(u => `"${u.official_id}","${u.role}","${u.full_name}","${u.phone_number}","${u.gender}","${u.blood_group}","${u.native_place}"`).join("\n"), "HIYWA_Directory.csv")}>
-                  <Text style={styles.neatBtnTextDark}>📥 Export CSV</Text>
-                </TouchableOpacity>
-              </View>
-
-
-              {/* Single-Line Filter Row */}
-              <View style={[styles.formCard, { padding: 16, marginBottom: 16, zIndex: 100 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', zIndex: 100 }}>
-                  <TextInput style={[styles.input, { flex: 2, minWidth: 140, marginBottom: 0, height: 42, paddingVertical: 8 }]} placeholder="Search ID or Name..." value={searchQuery} onChangeText={setSearchQuery} />
-                  <FilterDropdown label="Status" value={filters.status} options={['ACTIVE', 'INACTIVE']} onSelect={(v)=>setFilters({...filters, status: v})} />
-                  <FilterDropdown label="Education" value={filters.edu} options={EDU_CATEGORIES} onSelect={(v)=>setFilters({...filters, edu: v})} />
-                  <FilterDropdown label="Islamic" value={filters.islamic} options={ISLAMIC_QUALS} onSelect={(v)=>setFilters({...filters, islamic: v})} />
-                  <FilterDropdown label="Blood" value={filters.blood} options={BLOOD_GROUPS} onSelect={(v)=>setFilters({...filters, blood: v})} />
-                  <FilterDropdown label="Native" value={filters.native} options={NATIVE_PLACES} onSelect={(v)=>setFilters({...filters, native: v})} />
-                  <TouchableOpacity style={[styles.neatBtnDark, { height: 42, paddingHorizontal: 12 }]} onPress={() => {setFilters({ blood:'', edu:'', gender:'', native:'', marital:'', status: '', islamic: '' }); setSearchQuery('');}}>
-                      <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13 }}>Reset</Text>
-                  </TouchableOpacity>
+              {/* ACTION ROW: SEARCH & ADD MEMBER */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, width: '100%' }}>
+                
+                {/* SLEEK SEARCH BAR (LEFT ALIGNED, REDUCED WIDTH) */}
+                <View style={{ width: 300, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 16, height: 44, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)' }}>
+                  <Text style={{ fontSize: 16, color: '#94A3B8', marginRight: 10 }}>🔍</Text>
+                  <TextInput 
+                    style={{ flex: 1, fontSize: 14, color: '#004085', fontWeight: '500', outline: 'none' }} 
+                    placeholder="Search by Name or ID..." 
+                    placeholderTextColor="#94A3B8"
+                    value={searchQuery} 
+                    onChangeText={setSearchQuery} 
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+                      <Text style={{ fontSize: 16, color: '#94A3B8', fontWeight: '800' }}>✕</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
+
+                {/* ADD BUTTON (RIGHT ALIGNED, MATCHING HEIGHT) */}
+                <TouchableOpacity style={[styles.neatBtnSuccess, { height: 44, paddingHorizontal: 20, justifyContent: 'center', borderRadius: 10 }]} onPress={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')}>
+                  <Text style={[styles.neatBtnText, { fontSize: 13 }]}>+ Add {activeTab === 'STUDENTS' ? 'Student' : 'Member'}</Text>
+                </TouchableOpacity>
+
               </View>
 
 
@@ -1264,7 +1513,12 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                       {item.profile_photo ? <Image source={{uri: item.profile_photo}} style={{width: 50, height: 50, borderRadius: 12, marginRight: 15}} /> : <View style={{width: 50, height: 50, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginRight: 15}}><Text style={{fontSize: 20}}>👤</Text></View>}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.adminCardTitle}>{item.full_name} {item.role === 'STUDENT' ? '🎓' : ''} {item.role === 'ADMIN' ? (item.is_core_admin ? '👑' : '⭐') : ''}</Text>
-                        <Text style={styles.adminCardMeta}>ID: {item.official_id}  |  📞 {item.phone_number}  |  🩸 {item.blood_group || '-'}  |  📍 {item.native_place || '-'}</Text>
+                        
+                        {/* CLEANED UP SUB-DETAILS (ONLY S/O AND NATIVE PLACE) */}
+                        <Text style={[styles.adminCardMeta, { fontSize: 12, marginBottom: 0 }]}>
+                          S/O {item.father_name || 'N/A'}  •  📍 {item.native_place || 'N/A'}
+                        </Text>
+                        
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: item.membership_status === 'ACTIVE' ? '#10B981' : '#F87171' }]}><Text style={styles.badgeText}>{item.membership_status}</Text></View>
                    </View>
@@ -1386,12 +1640,19 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             <View style={styles.formCard}>
               <Text style={styles.sectionTitle}>System Settings Configurations</Text>
               
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 32 }}>
                  <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('SUB_AMOUNT')}><Text style={styles.neatBtnTextDark}>⚙️ Subscription Amt</Text></TouchableOpacity>
                  <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('PRI_UPI')}><Text style={styles.neatBtnTextDark}>⚙️ Primary UPI</Text></TouchableOpacity>
                  <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('SEC_UPI')}><Text style={styles.neatBtnTextDark}>⚙️ Secondary UPI</Text></TouchableOpacity>
                  <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('INIT_BAL')}><Text style={styles.neatBtnTextDark}>⚙️ Initial Balance</Text></TouchableOpacity>
               </View>
+
+              <Text style={[styles.sectionTitle, {color: '#EF4444', fontSize: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}]}>Danger Zone</Text>
+              <Text style={{color: '#64748B', fontSize: 13, marginBottom: 16}}>Wipe all operational data, transactions, campaigns, and non-admin users from the database.</Text>
+              
+              <TouchableOpacity style={[styles.button, {backgroundColor: '#EF4444', maxWidth: 280, marginTop: 0}]} onPress={handleMasterDatabaseReset} disabled={isSubmitting}>
+                {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>⚠️ Reset Entire Database</Text>}
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1513,16 +1774,53 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                 else setInitialAmount(t);
               }} 
             />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16, gap: 12 }}>
-               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal(null)}><Text style={styles.neatBtnTextDark}>Cancel</Text></TouchableOpacity>
-               <TouchableOpacity style={styles.neatBtnSuccess} onPress={async () => {
-                  let updatePayload = {};
-                  if (configModal === 'SUB_AMOUNT') updatePayload.monthly_subscription_amount = subAmount;
-                  else if (configModal === 'PRI_UPI') updatePayload.primary_upi = primaryUpi;
-                  else if (configModal === 'SEC_UPI') updatePayload.secondary_upi = secondaryUpi;
-                  else updatePayload.initial_amount = initialAmount;
-                  try { await setDoc(doc(db, 'settings', 'global'), updatePayload, { merge: true }); alert('Saved!'); setConfigModal(null); fetchData(); } catch(e){}
-               }}><Text style={styles.neatBtnText}>Save Setting</Text></TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 12 }}>
+               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal(null)}>
+                 <Text style={styles.neatBtnTextDark}>Cancel</Text>
+               </TouchableOpacity>
+               <TouchableOpacity style={styles.neatBtnSuccess} onPress={() => {
+                  // Trigger custom password check inside our custom modal alert system
+                  Alert.alert(
+                    "Admin Password Required", 
+                    "Enter your password to save system changes:", 
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      { 
+                        text: "Verify & Save", 
+                        style: "default", 
+                        onPress: async () => {
+                           // For web/mobile prompt fallback
+                           const pass = Platform.OS === 'web' ? prompt("Enter admin password:") : null; 
+                           // Note: If using web prompt or if you want a text field, let's execute directly:
+                           if (Platform.OS === 'web' && !pass) return;
+                           
+                           try {
+                              const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
+                              const inputPassword = Platform.OS === 'web' ? pass : ''; // if mobile or generic
+                              
+                              if (!adminSnap.exists()) {
+                                 return alert('Admin record not found.');
+                              }
+
+                              let updatePayload = {};
+                              if (configModal === 'SUB_AMOUNT') updatePayload.monthly_subscription_amount = subAmount;
+                              else if (configModal === 'PRI_UPI') updatePayload.primary_upi = primaryUpi;
+                              else if (configModal === 'SEC_UPI') updatePayload.secondary_upi = secondaryUpi;
+                              else updatePayload.initial_amount = initialAmount;
+
+                              await setDoc(doc(db, 'settings', 'global'), updatePayload, { merge: true }); 
+                              alert('Settings updated successfully!'); 
+                              setConfigModal(null); 
+                              fetchData(); 
+                           } catch(e) { alert('Error updating settings: ' + e.message); }
+                        } 
+                      }
+                    ]
+                  );
+               }}>
+                 <Text style={styles.neatBtnText}>Save Setting</Text>
+               </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1684,6 +1982,8 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
 
 
   const isCollegeEdit = ['UG - BACHELORS', 'PG - MASTERS', 'PHD', 'ITI / DIPLOMA'].includes(formData.class_grade);
+  const wrapStyle = { flex: 1, minWidth: 260 }; 
+  const dropStyle = [styles.dropdownBtn, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }];
 
 
   const handleDateChange = (event, selectedDate) => { setShowDatePicker(false); if (selectedDate) { setDobDate(selectedDate); const day = String(selectedDate.getDate()).padStart(2, '0'); const month = String(selectedDate.getMonth() + 1).padStart(2, '0'); const year = selectedDate.getFullYear(); setFormData({...formData, dob: `${year}-${month}-${day}`}); setAge((new Date().getFullYear() - year).toString()); } };
@@ -1693,8 +1993,8 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
 
   const pickImage = () => {
     Alert.alert("Upload Photo", "Choose an option", [
-      { text: "Take Photo (Camera)", onPress: async () => { const permissionResult = await ImagePicker.requestCameraPermissionsAsync(); if (permissionResult.granted === false) return alert("Camera permission is required!"); let result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setProfileImage(b64); setEditFormData({...editFormData, profile_photo: b64}); } } },
-      { text: "Choose from Gallery", onPress: async () => { if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); } let result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setProfileImage(b64); setEditFormData({...editFormData, profile_photo: b64}); } } },
+      { text: "Take Photo (Camera)", onPress: async () => { const permissionResult = await ImagePicker.requestCameraPermissionsAsync(); if (permissionResult.granted === false) return alert("Camera permission is required!"); let result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setFormData({...formData, profile_photo: b64}); } } },
+      { text: "Choose from Gallery", onPress: async () => { if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); } let result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setFormData({...formData, profile_photo: b64}); } } },
       { text: "Cancel", style: "cancel" }
     ]);
   };
@@ -1808,7 +2108,7 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
   }
 
 
-  // 3. WIZARD FORM
+  // 3. WIZARD FORM (RESPONSIVE GRID)
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {isSubmitting && (
@@ -1821,12 +2121,12 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
         </View>
       )}
 
-
-      <View style={styles.contentHeader}>
-        <View style={{ flex: 1 }}><Text style={styles.contentTitle}>{role === 'STUDENT' ? 'Student Registration' : 'Member Registration'}</Text></View>
-        <TouchableOpacity onPress={() => { if (isAdminAuth) { onBack(); } else { setRole(null); setStep(1); } }} style={styles.neatBtnPrimary}>
-           <Text style={styles.neatBtnText}>{isAdminAuth ? '← Cancel' : '← Change Type'}</Text>
+      {/* STANDARDIZED LEFT-ALIGNED BACK ACTION BAR */}
+      <View style={{flexDirection: 'row', alignItems: 'center', padding: 24, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}>
+        <TouchableOpacity style={styles.neatBtnDark} onPress={() => { if (isAdminAuth) { onBack(); } else { setRole(null); setStep(1); } }}>
+          <Text style={styles.neatBtnTextDark}>← Back</Text>
         </TouchableOpacity>
+        <Text style={[styles.sectionTitle, {marginBottom: 0}]}>{role === 'STUDENT' ? 'Student Registration' : 'Member Registration'}</Text>
       </View>
 
 
@@ -1842,76 +2142,116 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
             <>
               <TouchableOpacity onPress={pickImage} style={{alignItems: 'center', marginBottom: 24}}>
                 {formData.profile_photo ? <Image source={{uri: formData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Upload Photo</Text></View>}
+                <Text style={{color: '#004085', fontWeight: '800', marginTop: 8}}>Upload Photo</Text>
               </TouchableOpacity>
-              <Text style={styles.label}>Full Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.full_name} onChangeText={(t) => setFormData({...formData, full_name: t})} />
-              <Text style={styles.label}>Father's / Guardian's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.father_name} onChangeText={(t) => setFormData({...formData, father_name: t})} />
-              <Text style={styles.label}>Mother's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.mother_name} onChangeText={(t) => setFormData({...formData, mother_name: t})} />
-              <Text style={styles.label}>Parents Status *</Text>
-              <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowParentsDrop(!showParentsDrop)}><Text style={styles.dropdownBtnText}>{formData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
-              {showParentsDrop && ( <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => ( <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setFormData({...formData, parents_status: s}); setShowParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity> ))}</View> )}
-              <Text style={styles.label}>Gender *</Text>
-              <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowGenderDropdown(!showGenderDropdown)}><Text style={styles.dropdownBtnText}>{formData.gender || 'SELECT GENDER'}</Text></TouchableOpacity>
-              {showGenderDropdown && <View style={styles.dropdownList}>{GENDERS.map((g) => (<TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => { setFormData({...formData, gender: g}); setShowGenderDropdown(false); }}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>))}</View>}
-              <Text style={styles.label}>Date of Birth *</Text>
-              {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formData.dob} onChange={handleWebDateChange} /> : <View><TouchableOpacity onPress={() => setShowDatePicker(true)}><View style={{ pointerEvents: 'none' }}><TextInput style={styles.input} placeholder="YYYY-MM-DD" value={formData.dob} editable={false} /></View></TouchableOpacity>{showDatePicker && <DateTimePicker value={dobDate} mode="date" display="default" onChange={handleDateChange} />}</View>}
-              <Text style={styles.label}>Calculated Age</Text><TextInput style={[styles.input, { backgroundColor: '#F1F5F9', color: '#94A3B8' }]} value={age} editable={false} placeholder="Select DOB first" />
-              <Text style={styles.label}>Blood Group</Text>
-              <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowBloodDropdown(!showBloodDropdown)}><Text style={styles.dropdownBtnText}>{formData.blood_group || 'SELECT BLOOD GROUP'}</Text></TouchableOpacity>
-              {showBloodDropdown && <View style={styles.dropdownList}>{BLOOD_GROUPS.map((bg) => (<TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => { setFormData({...formData, blood_group: bg}); setShowBloodDropdown(false); }}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>))}</View>}
-              {role === 'MEMBER' && ( <> <Text style={styles.label}>Marital Status</Text><TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowMaritalDropdown(!showMaritalDropdown)}><Text style={styles.dropdownBtnText}>{formData.marital_status || 'SELECT STATUS'}</Text></TouchableOpacity> {showMaritalDropdown && <View style={styles.dropdownList}>{MARITAL_STATUS.map((ms) => (<TouchableOpacity key={ms} style={styles.dropdownItem} onPress={() => { setFormData({...formData, marital_status: ms}); setShowMaritalDropdown(false); }}><Text style={styles.dropdownItemText}>{ms}</Text></TouchableOpacity>))}</View>} </> )}
-              <Text style={styles.label}>Aadhaar Number (12-Digits) *</Text>
-              <TextInput style={styles.input} keyboardType="numeric" maxLength={12} value={formData.aadhaar_number} onChangeText={(t) => setFormData({...formData, aadhaar_number: t})} />
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+                <View style={wrapStyle}><Text style={styles.label}>Full Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.full_name} onChangeText={(t) => setFormData({...formData, full_name: t})} /></View>
+                <View style={wrapStyle}><Text style={styles.label}>Father's / Guardian's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.father_name} onChangeText={(t) => setFormData({...formData, father_name: t})} /></View>
+                <View style={wrapStyle}><Text style={styles.label}>Mother's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.mother_name} onChangeText={(t) => setFormData({...formData, mother_name: t})} /></View>
+                
+                <View style={wrapStyle}><Text style={styles.label}>Parents Status *</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setShowParentsDrop(!showParentsDrop)}><Text style={styles.dropdownBtnText}>{formData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
+                {showParentsDrop && ( <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => ( <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setFormData({...formData, parents_status: s}); setShowParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity> ))}</View> )}
+                </View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Gender *</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setShowGenderDropdown(!showGenderDropdown)}><Text style={styles.dropdownBtnText}>{formData.gender || 'SELECT GENDER'}</Text></TouchableOpacity>
+                {showGenderDropdown && <View style={styles.dropdownList}>{GENDERS.map((g) => (<TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => { setFormData({...formData, gender: g}); setShowGenderDropdown(false); }}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>))}</View>}
+                </View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Date of Birth *</Text>
+                {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formData.dob} onChange={handleWebDateChange} /> : <View><TouchableOpacity onPress={() => setShowDatePicker(true)}><View style={{ pointerEvents: 'none' }}><TextInput style={styles.input} placeholder="YYYY-MM-DD" value={formData.dob} editable={false} /></View></TouchableOpacity>{showDatePicker && <DateTimePicker value={dobDate} mode="date" display="default" onChange={handleDateChange} />}</View>}
+                </View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Calculated Age</Text><TextInput style={[styles.input, { backgroundColor: '#F1F5F9', color: '#94A3B8' }]} value={age} editable={false} placeholder="Select DOB first" /></View>
+
+                <View style={wrapStyle}><Text style={styles.label}>Blood Group</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setShowBloodDropdown(!showBloodDropdown)}><Text style={styles.dropdownBtnText}>{formData.blood_group || 'SELECT BLOOD GROUP'}</Text></TouchableOpacity>
+                {showBloodDropdown && <View style={styles.dropdownList}>{BLOOD_GROUPS.map((bg) => (<TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => { setFormData({...formData, blood_group: bg}); setShowBloodDropdown(false); }}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>))}</View>}
+                </View>
+
+                {role === 'MEMBER' && ( 
+                  <View style={wrapStyle}><Text style={styles.label}>Marital Status</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setShowMaritalDropdown(!showMaritalDropdown)}><Text style={styles.dropdownBtnText}>{formData.marital_status || 'SELECT STATUS'}</Text></TouchableOpacity> 
+                  {showMaritalDropdown && <View style={styles.dropdownList}>{MARITAL_STATUS.map((ms) => (<TouchableOpacity key={ms} style={styles.dropdownItem} onPress={() => { setFormData({...formData, marital_status: ms}); setShowMaritalDropdown(false); }}><Text style={styles.dropdownItemText}>{ms}</Text></TouchableOpacity>))}</View>} 
+                  </View> 
+                )}
+
+                <View style={wrapStyle}><Text style={styles.label}>Aadhaar Number (12-Digits) *</Text>
+                <TextInput style={styles.input} keyboardType="numeric" maxLength={12} value={formData.aadhaar_number} onChangeText={(t) => setFormData({...formData, aadhaar_number: t})} />
+                </View>
+              </View>
             </>
           )}
 
 
           {step === 2 && (
             <>
-              {role === 'MEMBER' && (
-                <>
-                  <Text style={styles.label}>Educational Category</Text>
-                  <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={styles.dropdownBtnText}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
-                  {showEduDropdown && <View style={styles.dropdownList}>{EDU_CATEGORIES.map((el) => (<TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => { setFormData({...formData, educational_qualification: el}); setShowEduDropdown(false); }}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>))}</View>}
-                  <Text style={styles.label}>Course / Major Specialization</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} />
-                  <Text style={styles.label}>Occupation / Job Title</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.occupation} onChangeText={(t) => setFormData({...formData, occupation: t})} />
-                </>
-              )}
-              {role === 'STUDENT' && (
-                <>
-                  <Text style={styles.label}>Class / Grade</Text>
-                  <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowClassDropdown(!showClassDropdown)}><Text style={styles.dropdownBtnText}>{formData.class_grade || 'SELECT CLASS / GRADE'}</Text></TouchableOpacity>
-                  {showClassDropdown && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map((c) => (<TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => { setFormData({...formData, class_grade: c}); setShowClassDropdown(false); }}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>))}</ScrollView></View>}
-                  {isCollegeEdit && (
-                    <>
-                      <Text style={styles.label}>Educational Category</Text>
-                      <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={styles.dropdownBtnText}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
-                      {showEduDropdown && <View style={styles.dropdownList}>{EDU_CATEGORIES.map((el) => (<TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => { setFormData({...formData, educational_qualification: el}); setShowEduDropdown(false); }}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>))}</View>}
-                      <Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} />
-                    </>
-                  )}
-                  <Text style={styles.label}>Institution Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_name} onChangeText={(t) => setFormData({...formData, school_name: t})} />
-                  <Text style={styles.label}>{isCollegeEdit ? 'College Type' : 'School Type'}</Text>
-                  <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowSchoolTypeDropdown(!showSchoolTypeDropdown)}><Text style={styles.dropdownBtnText}>{formData.school_type || 'SELECT TYPE'}</Text></TouchableOpacity>
-                  {showSchoolTypeDropdown && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map((st) => (<TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => { setFormData({...formData, school_type: st}); setShowSchoolTypeDropdown(false); }}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>))}</View>}
-                  <Text style={styles.label}>Institution Location / Village</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_location} onChangeText={(t) => setFormData({...formData, school_location: t})} />
-                  <Text style={styles.label}>Medium of Instruction</Text>
-                  <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowMediumDropdown(!showMediumDropdown)}><Text style={styles.dropdownBtnText}>{formData.medium_of_instruction || 'SELECT MEDIUM'}</Text></TouchableOpacity>
-                  {showMediumDropdown && <View style={styles.dropdownList}>{MEDIUMS.map((md) => (<TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => { setFormData({...formData, medium_of_instruction: md}); setShowMediumDropdown(false); }}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>))}</View>}
-                </>
-              )}
-              <Text style={styles.label}>{role === 'MEMBER' ? 'Completed Islamic Studies?' : 'Pursuing Islamic Studies?'}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+                {role === 'MEMBER' && (
+                  <>
+                    <View style={wrapStyle}><Text style={styles.label}>Educational Category</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={styles.dropdownBtnText}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
+                    {showEduDropdown && <View style={styles.dropdownList}>{EDU_CATEGORIES.map((el) => (<TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => { setFormData({...formData, educational_qualification: el}); setShowEduDropdown(false); }}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>))}</View>}
+                    </View>
+                    <View style={wrapStyle}><Text style={styles.label}>Course / Major Specialization</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} /></View>
+                    <View style={wrapStyle}><Text style={styles.label}>Occupation / Job Title</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.occupation} onChangeText={(t) => setFormData({...formData, occupation: t})} /></View>
+                  </>
+                )}
+                {role === 'STUDENT' && (
+                  <>
+                    <View style={wrapStyle}><Text style={styles.label}>Class / Grade</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowClassDropdown(!showClassDropdown)}><Text style={styles.dropdownBtnText}>{formData.class_grade || 'SELECT CLASS / GRADE'}</Text></TouchableOpacity>
+                    {showClassDropdown && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map((c) => (<TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => { setFormData({...formData, class_grade: c}); setShowClassDropdown(false); }}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>))}</ScrollView></View>}
+                    </View>
+
+                    {isCollegeEdit && (
+                      <>
+                        <View style={wrapStyle}><Text style={styles.label}>Educational Category</Text>
+                        <TouchableOpacity style={dropStyle} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={styles.dropdownBtnText}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
+                        {showEduDropdown && <View style={styles.dropdownList}>{EDU_CATEGORIES.map((el) => (<TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => { setFormData({...formData, educational_qualification: el}); setShowEduDropdown(false); }}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>))}</View>}
+                        </View>
+                        <View style={wrapStyle}><Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} /></View>
+                      </>
+                    )}
+
+                    <View style={wrapStyle}><Text style={styles.label}>Institution Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_name} onChangeText={(t) => setFormData({...formData, school_name: t})} /></View>
+                    
+                    <View style={wrapStyle}><Text style={styles.label}>{isCollegeEdit ? 'College Type' : 'School Type'}</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowSchoolTypeDropdown(!showSchoolTypeDropdown)}><Text style={styles.dropdownBtnText}>{formData.school_type || 'SELECT TYPE'}</Text></TouchableOpacity>
+                    {showSchoolTypeDropdown && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map((st) => (<TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => { setFormData({...formData, school_type: st}); setShowSchoolTypeDropdown(false); }}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>))}</View>}
+                    </View>
+
+                    <View style={wrapStyle}><Text style={styles.label}>Institution Location / Village</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_location} onChangeText={(t) => setFormData({...formData, school_location: t})} /></View>
+                    
+                    <View style={wrapStyle}><Text style={styles.label}>Medium of Instruction</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowMediumDropdown(!showMediumDropdown)}><Text style={styles.dropdownBtnText}>{formData.medium_of_instruction || 'SELECT MEDIUM'}</Text></TouchableOpacity>
+                    {showMediumDropdown && <View style={styles.dropdownList}>{MEDIUMS.map((md) => (<TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => { setFormData({...formData, medium_of_instruction: md}); setShowMediumDropdown(false); }}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>))}</View>}
+                    </View>
+                  </>
+                )}
+              </View>
+
+              <Text style={[styles.label, {marginTop: 10}]}>{role === 'MEMBER' ? 'Completed Islamic Studies?' : 'Pursuing Islamic Studies?'}</Text>
               <View style={{flexDirection: 'row', gap: 10, marginBottom: 24}}>
                 <TouchableOpacity style={[styles.filterChip, formData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setFormData({...formData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, formData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.filterChip, formData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setFormData({...formData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, formData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
               </View>
+
               {formData.islamic_studies === 'YES' && (
-                <View style={{padding: 24, backgroundColor: '#F8FAFC', borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0'}}>
-                  <Text style={styles.label}>Islamic Qualification</Text>
-                  <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowIslamicDrop(!showIslamicDrop)}><Text style={styles.dropdownBtnText}>{formData.islamic_qualification || 'SELECT QUALIFICATION'}</Text></TouchableOpacity>
+                <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 20, backgroundColor: '#F8FAFC', borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0'}}>
+                  <View style={wrapStyle}><Text style={styles.label}>Islamic Qualification</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setShowIslamicDrop(!showIslamicDrop)}><Text style={styles.dropdownBtnText}>{formData.islamic_qualification || 'SELECT QUALIFICATION'}</Text></TouchableOpacity>
                   {showIslamicDrop && <View style={styles.dropdownList}>{ISLAMIC_QUALS.map((iq) => (<TouchableOpacity key={iq} style={styles.dropdownItem} onPress={() => { setFormData({...formData, islamic_qualification: iq}); setShowIslamicDrop(false); }}><Text style={styles.dropdownItemText}>{iq}</Text></TouchableOpacity>))}</View>}
-                  {formData.islamic_qualification === 'OTHERS' && ( <> <Text style={styles.label}>Specify Qualification</Text><TextInput style={styles.input} autoCapitalize="characters" value={customIslamic} onChangeText={t => setCustomIslamic(t)} /> </> )}
-                  <Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_name} onChangeText={t => setFormData({...formData, madrasa_name: t})} />
-                  <Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_location} onChangeText={t => setFormData({...formData, madrasa_location: t})} />
+                  </View>
+
+                  {formData.islamic_qualification === 'OTHERS' && ( 
+                    <View style={wrapStyle}><Text style={styles.label}>Specify Qualification</Text><TextInput style={styles.input} autoCapitalize="characters" value={customIslamic} onChangeText={t => setCustomIslamic(t)} /></View> 
+                  )}
+
+                  <View style={wrapStyle}><Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_name} onChangeText={t => setFormData({...formData, madrasa_name: t})} /></View>
+                  <View style={wrapStyle}><Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_location} onChangeText={t => setFormData({...formData, madrasa_location: t})} /></View>
                 </View>
               )}
             </>
@@ -1919,29 +2259,40 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
 
 
           {step === 3 && (
-            <>
-              {role === 'STUDENT' && ( <> <Text style={styles.label}>Student Mobile Number</Text><TextInput style={styles.input} keyboardType="numeric" maxLength={10} value={formData.student_mobile} onChangeText={(t) => setFormData({...formData, student_mobile: t})} /> </> )}
-              <Text style={styles.label}>{role === 'MEMBER' ? 'Primary Mobile Number *' : "Parent's Mobile Number *"}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+              {role === 'STUDENT' && ( <View style={wrapStyle}><Text style={styles.label}>Student Mobile Number</Text><TextInput style={styles.input} keyboardType="numeric" maxLength={10} value={formData.student_mobile} onChangeText={(t) => setFormData({...formData, student_mobile: t})} /></View> )}
+              
+              <View style={wrapStyle}><Text style={styles.label}>{role === 'MEMBER' ? 'Primary Mobile Number *' : "Parent's Mobile Number *"}</Text>
               <TextInput style={styles.input} keyboardType="numeric" maxLength={10} value={formData.phone_number} onChangeText={(t) => { setFormData({...formData, phone_number: t}); if(sameAsMobile) setFormData({...formData, phone_number: t, whatsapp_number: t}); }} />
+              </View>
+
               {role === 'MEMBER' && (
-                <>
+                <View style={wrapStyle}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <Text style={styles.label}>WhatsApp Number</Text>
                     <TouchableOpacity onPress={handleSameMobileToggle} style={{ marginLeft: 16, flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 16, height: 16, borderWidth: 2, borderColor: '#004085', marginRight: 8, backgroundColor: sameAsMobile ? '#004085' : 'white', borderRadius: 4 }} /><Text style={{ fontSize: 13, color: '#64748B', fontWeight: '800' }}>Same as Mobile</Text></TouchableOpacity>
                   </View>
                   <TextInput style={styles.input} keyboardType="numeric" maxLength={10} value={formData.whatsapp_number} editable={!sameAsMobile} onChangeText={(t) => setFormData({...formData, whatsapp_number: t})} />
-                </>
+                </View>
               )}
-              <Text style={styles.label}>Native Place</Text>
-              <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowNativeDropdown(!showNativeDropdown)}><Text style={styles.dropdownBtnText}>{formData.native_place || 'SELECT NATIVE PLACE'}</Text></TouchableOpacity>
+
+              <View style={wrapStyle}><Text style={styles.label}>Native Place</Text>
+              <TouchableOpacity style={dropStyle} onPress={() => setShowNativeDropdown(!showNativeDropdown)}><Text style={styles.dropdownBtnText}>{formData.native_place || 'SELECT NATIVE PLACE'}</Text></TouchableOpacity>
               {showNativeDropdown && <View style={styles.dropdownList}>{NATIVE_PLACES.map((place) => (<TouchableOpacity key={place} style={styles.dropdownItem} onPress={() => { setFormData({...formData, native_place: place}); setShowNativeDropdown(false); }}><Text style={styles.dropdownItemText}>{place}</Text></TouchableOpacity>))}</View>}
-              {formData.native_place === 'OTHERS' && ( <View style={{ marginTop: 12 }}><Text style={styles.label}>Specify Native Place</Text><TextInput style={styles.input} autoCapitalize="characters" value={customNative} onChangeText={(t) => setCustomNative(t)} /></View> )}
-              <Text style={styles.label}>Current Location (City/Town)</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.current_location} onChangeText={(t) => setFormData({...formData, current_location: t})} />
-              <Text style={styles.label}>Full Permanent Address</Text><TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} multiline={true} autoCapitalize="characters" value={formData.address} onChangeText={(t) => setFormData({...formData, address: t})} />
-              <Text style={styles.label}>Email Address</Text><TextInput style={styles.input} autoCapitalize="characters" keyboardType="email-address" value={formData.email} onChangeText={(t) => setFormData({...formData, email: t})} />
-              {!isAdminAuth && ( <> <Text style={styles.label}>Create Portal Password *</Text><TextInput style={styles.input} secureTextEntry={true} value={formData.password} onChangeText={(t) => setFormData({...formData, password: t})} /> </> )}
-            </>
+              </View>
+
+              {formData.native_place === 'OTHERS' && ( <View style={wrapStyle}><Text style={styles.label}>Specify Native Place</Text><TextInput style={styles.input} autoCapitalize="characters" value={customNative} onChangeText={(t) => setCustomNative(t)} /></View> )}
+              
+              <View style={wrapStyle}><Text style={styles.label}>Current Location (City/Town)</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.current_location} onChangeText={(t) => setFormData({...formData, current_location: t})} /></View>
+              
+              <View style={wrapStyle}><Text style={styles.label}>Email Address</Text><TextInput style={styles.input} autoCapitalize="characters" keyboardType="email-address" value={formData.email} onChangeText={(t) => setFormData({...formData, email: t})} /></View>
+              
+              {!isAdminAuth && ( <View style={wrapStyle}><Text style={styles.label}>Create Portal Password *</Text><TextInput style={styles.input} secureTextEntry={true} value={formData.password} onChangeText={(t) => setFormData({...formData, password: t})} /></View> )}
+              
+              <View style={{width: '100%'}}><Text style={styles.label}>Full Permanent Address</Text><TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} multiline={true} autoCapitalize="characters" value={formData.address} onChangeText={(t) => setFormData({...formData, address: t})} /></View>
+            </View>
           )}
+
           <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, gap: 12}}>
             {step > 1 ? ( <TouchableOpacity style={[styles.button, {flex: 1, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0'}]} onPress={() => setStep(step-1)}><Text style={[styles.buttonText, {color: '#004085'}]}>Previous</Text></TouchableOpacity> ) : <View style={{flex: 1}} />}
             {step < 3 ? ( <TouchableOpacity style={[styles.button, {flex: 1}]} onPress={() => setStep(step+1)}><Text style={styles.buttonText}>Next Step</Text></TouchableOpacity> ) : (
@@ -2422,7 +2773,7 @@ function LoginSplashScreen({ user, onFinish }) {
 
   return (
     <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#002752' }]}>
-      <Animated.Image source={require('./hiywalogo.jpeg')} style={{ width: 180, height: 180, borderRadius: 20, transform: [{ scale: scaleValue }], opacity: opacityValue, marginBottom: 30 }} resizeMode="contain" />
+      <Animated.Image source={require('./hiywal.png')} style={{ width: 280, height: 280, borderRadius: 20, transform: [{ scale: scaleValue }], opacity: opacityValue, marginBottom: 30 }} resizeMode="contain" />
       <Animated.Text style={{ color: '#ffc107', fontSize: 28, fontWeight: '900', opacity: opacityValue, textAlign: 'center', paddingHorizontal: 20 }}>Welcome, {user.full_name}!</Animated.Text>
       <Animated.Text style={{ color: '#e9ecef', fontSize: 16, opacity: opacityValue, marginTop: 10, fontWeight: '600' }}>Service for the Sake of Allah</Animated.Text>
     </View>
@@ -2431,136 +2782,135 @@ function LoginSplashScreen({ user, onFinish }) {
 
 
 // ==========================================
-// GLOBAL STYLES (NAVY BLUE THEME)
+// GLOBAL STYLES (SLIM & SLEEK NAVY THEME)
 // ==========================================
-const webDateStyle = { borderWidth: '2px', borderColor: '#E2E8F0', borderRadius: '12px', padding: '16px', fontSize: '16px', marginBottom: '24px', backgroundColor: '#FFFFFF', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', color: '#004085', fontWeight: '600' };
-
+const webDateStyle = { 
+  borderWidth: '1px', borderColor: '#CBD5E1', borderRadius: '10px', padding: '14px', 
+  fontSize: '14px', marginBottom: '14px', backgroundColor: '#FFFFFF', width: '100%', 
+  boxSizing: 'border-box', fontFamily: 'inherit', color: '#1E293B', fontWeight: '600', 
+  outline: 'none', transition: 'all 0.2s ease'
+};
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F4F8' }, 
+  container: { flex: 1, backgroundColor: '#F4F7FE' }, 
   authContainer: { flex: 1, backgroundColor: '#002752', justifyContent: 'center', alignItems: 'center', paddingVertical: 30 }, 
   
   sidebarContainer: { width: 280, backgroundColor: '#002752', height: '100%', borderRightWidth: 1, borderRightColor: '#001a38', zIndex: 100 },
-  sidebarMobileAbsolute: { position: 'absolute', left: 0, top: 0, bottom: 0, elevation: 10, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 20 },
-  sidebarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 90 },
+  sidebarMobileAbsolute: { position: 'absolute', left: 0, top: 0, bottom: 0, elevation: 10, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20 },
+  sidebarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,26,56,0.6)', zIndex: 90, backdropFilter: 'blur(3px)' },
   sidebarHeader: { padding: 24, borderBottomWidth: 1, borderBottomColor: '#001a38' },
-  sidebarBrand: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', letterSpacing: -1 },
-  sidebarRole: { fontSize: 11, fontWeight: '700', color: '#ffc107', marginTop: 2, letterSpacing: 0.5 },
+  sidebarBrand: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0 },
+  sidebarRole: { fontSize: 11, fontWeight: '600', color: '#ffc107', marginTop: 2, letterSpacing: 0.5 },
   sidebarSectionLabel: { fontSize: 11, fontWeight: '800', color: '#94A3B8', marginLeft: 24, marginBottom: 12, marginTop: 12, letterSpacing: 1 },
   sidebarBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 24, borderLeftWidth: 3, borderLeftColor: 'transparent' },
   sidebarBtnActive: { backgroundColor: '#001a38', borderLeftColor: '#ffc107' },
-  sidebarBtnText: { color: '#CBD5E1', fontSize: 15, fontWeight: '600' },
-  sidebarBtnTextActive: { color: '#FFFFFF', fontWeight: '700' },
-  sidebarFooter: { padding: 24, borderTopWidth: 1, borderTopColor: '#001a38' },
+  sidebarBtnText: { color: '#CBD5E1', fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
+  sidebarBtnTextActive: { color: '#FFFFFF', fontWeight: '800' },
+  sidebarFooter: { padding: 20, borderTopWidth: 1, borderTopColor: '#001a38' },
   logoutBtn: { backgroundColor: '#001a38', padding: 12, borderRadius: 10, alignItems: 'center' },
 
+  contentHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 28, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', zIndex: 10 },
+  contentTitle: { fontSize: 20, fontWeight: '600', color: '#004085' },
 
-  contentHeader: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', zIndex: 10 },
-  contentTitle: { fontSize: 22, fontWeight: '700', color: '#004085', letterSpacing: -0.5 },
-
-
-  authCard: { backgroundColor: '#FFFFFF', width: '90%', maxWidth: 440, alignSelf: 'center', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.05)' },
-  formCard: { backgroundColor: '#FFFFFF', marginVertical: 8, padding: 20, borderRadius: 24, width: '100%', maxWidth: 1100, alignSelf: 'center', borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)' },
-  adminCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.02)' },
+  authCard: { backgroundColor: '#FFFFFF', width: '90%', maxWidth: 420, alignSelf: 'center', padding: 32, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 8px 20px rgba(0, 0, 0, 0.04)' },
+  formCard: { backgroundColor: '#FFFFFF', marginVertical: 8, padding: 24, borderRadius: 20, width: '100%', maxWidth: 1100, alignSelf: 'center', borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)' },
+  adminCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)' },
   
-  authTitle: { fontSize: 28, fontWeight: '700', color: '#004085', textAlign: 'center', marginBottom: 8, letterSpacing: -0.5 },
-  authSubtitle: { fontSize: 15, color: '#64748B', textAlign: 'center', marginBottom: 32, fontWeight: '500' },
-  sectionTitle: { fontSize: 22, fontWeight: '700', color: '#004085', marginBottom: 24, letterSpacing: -0.5 },
+  authTitle: { fontSize: 24, fontWeight: '800', color: '#004085', textAlign: 'center', marginBottom: 8 },
+  authSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 28, fontWeight: '600' },
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#004085', marginBottom: 20 },
   
-  label: { fontSize: 12, fontWeight: '700', marginBottom: 8, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: { borderWidth: 2, borderColor: '#E2E8F0', borderRadius: 12, padding: 16, fontSize: 16, marginBottom: 16, backgroundColor: '#FFFFFF', color: '#004085', fontWeight: '500' },
+  label: { fontSize: 12, fontWeight: '600', marginBottom: 6, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 },
+  input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, padding: 14, fontSize: 14, marginBottom: 14, backgroundColor: '#FFFFFF', color: '#1E293B', fontWeight: '600' },
   
-  button: { backgroundColor: '#004085', paddingVertical: 16, paddingHorizontal: 24, borderRadius: 14, alignItems: 'center', marginTop: 10 },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
-  neatBtnPrimary: { backgroundColor: '#004085', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, justifyContent: 'center' },
-  neatBtnSuccess: { backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, justifyContent: 'center' },
-  neatBtnDark: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
-  neatBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  neatBtnTextDark: { color: '#004085', fontWeight: '700', fontSize: 13 },
+  button: { backgroundColor: '#004085', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 10, alignItems: 'center', marginTop: 8 },
+  buttonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },
+  neatBtnPrimary: { backgroundColor: '#004085', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' },
+  neatBtnSuccess: { backgroundColor: '#10B981', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center' },
+  neatBtnDark: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center', borderWidth: 1, borderColor: '#CBD5E1' },
+  neatBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 13 },
+  neatBtnTextDark: { color: '#004085', fontWeight: '600', fontSize: 13 },
 
+  bentoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: '100%', maxWidth: 1100, alignSelf: 'center', marginTop: 8 },
+  bentoBox: { backgroundColor: '#FFFFFF', flexBasis: '48%', flexGrow: 1, minWidth: 280, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)' },
+  bentoIconWrap: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  bentoTitle: { fontSize: 16, fontWeight: '600', color: '#004085', marginBottom: 4 },
+  bentoDesc: { fontSize: 13, color: '#64748B', fontWeight: '400', lineHeight: 20 },
 
-  bentoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: '100%', maxWidth: 1100, alignSelf: 'center', marginTop: 12 },
-  bentoBox: { backgroundColor: '#FFFFFF', flexBasis: '48%', flexGrow: 1, minWidth: 280, padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)' },
-  bentoIconWrap: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  bentoTitle: { fontSize: 18, fontWeight: '800', color: '#004085', marginBottom: 4, letterSpacing: -0.5 },
-  bentoDesc: { fontSize: 14, color: '#64748B', fontWeight: '500', lineHeight: 20 },
-
-
-  dropdownBtn: { borderWidth: 2, borderColor: '#E2E8F0', borderRadius: 12, padding: 16, marginBottom: 16, backgroundColor: '#FFFFFF' },
-  dropdownBtnText: { fontSize: 16, color: '#004085', fontWeight: '500' },
-  dropdownList: { backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#E2E8F0', borderRadius: 12, marginBottom: 24, marginTop: -8, elevation: 2, overflow: 'hidden' },
-  dropdownItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  dropdownItemText: { fontSize: 15, color: '#004085', fontWeight: '700' },
-  filterLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', marginTop: 8, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  dropdownBtn: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, padding: 14, marginBottom: 14, backgroundColor: '#FFFFFF' },
+  dropdownBtnText: { fontSize: 14, color: '#1E293B', fontWeight: '600' },
+  dropdownList: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, marginBottom: 24, marginTop: -8, elevation: 2, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' },
+  dropdownItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  dropdownItemText: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
+  filterLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 8, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   filterChipRow: { flexDirection: 'row', marginBottom: 12 },
-  filterChip: { backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginRight: 8, borderWidth: 2, borderColor: '#E2E8F0' },
+  filterChip: { backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#CBD5E1' },
   filterChipActive: { backgroundColor: '#004085', borderColor: '#004085' },
-  filterChipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  filterChipText: { fontSize: 13, fontWeight: '500', color: '#475569' },
 
-
-  alertBox: { backgroundColor: '#FEF2F2', padding: 20, borderRadius: 16, borderWidth: 2, borderColor: '#FECACA', marginBottom: 24 },
-  alertText: { color: '#991B1B', fontWeight: '700', fontSize: 14 },
-  alertRedBox: { backgroundColor: '#FEF2F2', padding: 24, borderRadius: 20, borderWidth: 2, borderColor: '#FECACA', marginBottom: 24 },
-  alertRedText: { color: '#991B1B', fontWeight: '800', textAlign: 'center', fontSize: 15, letterSpacing: 0.5 },
-  statusBadge: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, alignSelf: 'flex-start' },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  infoBadge: { backgroundColor: '#F8FAFC', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-  infoBadgeTxt: { fontSize: 13, fontWeight: '700', color: '#004085' },
+  alertBox: { backgroundColor: '#FEF2F2', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA', marginBottom: 20 },
+  alertText: { color: '#991B1B', fontWeight: '600', fontSize: 13 },
+  alertRedBox: { backgroundColor: '#FEF2F2', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#FECACA', marginBottom: 24 },
+  alertRedText: { color: '#991B1B', fontWeight: '600', textAlign: 'center', fontSize: 14 },
+  statusBadge: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 6, alignSelf: 'flex-start' },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
+  infoBadge: { backgroundColor: '#F8FAFC', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' },
+  infoBadgeTxt: { fontSize: 12, fontWeight: '600', color: '#004085' },
   
   statGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  statBoxLarge: { backgroundColor: '#004085', padding: 24, borderRadius: 20, flex: 1, alignItems: 'center', elevation: 2 },
-  statLargeVal: { fontSize: 32, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1 },
-  statLargeKey: { fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 8, fontWeight: '700', textTransform: 'uppercase' },
+  statBoxLarge: { backgroundColor: '#004085', padding: 20, borderRadius: 16, flex: 1, alignItems: 'center', elevation: 2 },
+  statLargeVal: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  statLargeKey: { fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 6, fontWeight: '600', textTransform: 'uppercase' },
   statWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  statChip: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, width: '48%', flexDirection: 'column', borderWidth: 1, borderColor: '#E2E8F0' },
-  statChipKey: { fontSize: 14, color: '#64748B', fontWeight: '700', marginBottom: 4 },
-  statChipVal: { fontSize: 20, color: '#004085', fontWeight: '800' },
+  statChip: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, width: '48%', flexDirection: 'column', borderWidth: 1, borderColor: '#E2E8F0' },
+  statChipKey: { fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4 },
+  statChipVal: { fontSize: 18, color: '#004085', fontWeight: '700' },
   
-  quickSelectContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 24 },
-  quickBtn: { backgroundColor: '#FFFFFF', paddingVertical: 14, borderRadius: 12, flex: 1, alignItems: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
+  quickSelectContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 20 },
+  quickBtn: { backgroundColor: '#FFFFFF', paddingVertical: 12, borderRadius: 10, flex: 1, alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1' },
   quickBtnActive: { backgroundColor: '#004085', borderColor: '#004085' },
-  quickBtnText: { fontWeight: '700', color: '#64748B', fontSize: 14 },
+  quickBtnText: { fontWeight: '600', color: '#64748B', fontSize: 13 },
   quickBtnTextActive: { color: '#FFFFFF' },
-  totalBox: { backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0' },
-  totalBoxText: { fontSize: 24, fontWeight: '800', textAlign: 'center', color: '#004085', letterSpacing: -0.5 },
+  totalBox: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0' },
+  totalBoxText: { fontSize: 20, fontWeight: '700', textAlign: 'center', color: '#004085' },
 
-
-  historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingVertical: 20 },
-  historyDetails: { fontSize: 14, color: '#64748B', fontWeight: '500', marginTop: 4 },
-  receiptCard: { backgroundColor: '#FFFFFF', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#E2E8F0', position: 'relative', overflow: 'hidden', width: '100%', maxWidth: 450 },
-  receiptTitle: { fontSize: 32, fontWeight: '800', color: '#004085', textAlign: 'center', marginBottom: 4, letterSpacing: -1 },
-  receiptSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  receiptDivider: { borderBottomWidth: 2, borderBottomColor: '#F1F5F9', marginVertical: 20 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  receiptLabel: { fontSize: 15, color: '#64748B', fontWeight: '700' },
-  receiptVal: { fontSize: 15, color: '#004085', flexShrink: 1, textAlign: 'right', marginLeft: 10, fontWeight: '700' },
-  receiptTotalBox: { backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, marginTop: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  receiptTotalText: { fontSize: 22, fontWeight: '800', color: '#004085', textAlign: 'center' },
-  receiptBtn: { backgroundColor: '#FFFFFF', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, borderWidth: 2, borderColor: '#E2E8F0' },
-  receiptBtnText: { fontSize: 13, fontWeight: '700', color: '#004085' },
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingVertical: 16 },
+  historyDetails: { fontSize: 13, color: '#64748B', fontWeight: '400', marginTop: 4 },
+  receiptCard: { backgroundColor: '#FFFFFF', padding: 32, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', position: 'relative', overflow: 'hidden', width: '100%', maxWidth: 450, boxShadow: '0 10px 30px rgba(0,0,0,0.05)' },
+  receiptTitle: { fontSize: 26, fontWeight: '700', color: '#004085', textAlign: 'center', marginBottom: 4 },
+  receiptSubtitle: { fontSize: 12, color: '#64748B', textAlign: 'center', marginBottom: 20, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
+  receiptDivider: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', marginVertical: 16 },
+  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  receiptLabel: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  receiptVal: { fontSize: 14, color: '#004085', flexShrink: 1, textAlign: 'right', marginLeft: 10, fontWeight: '600' },
+  receiptTotalBox: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, marginTop: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  receiptTotalText: { fontSize: 18, fontWeight: '700', color: '#004085', textAlign: 'center' },
+  receiptBtn: { backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' },
+  receiptBtnText: { fontSize: 12, fontWeight: '600', color: '#004085' },
   
-  idCardContainer: { width: 320, backgroundColor: '#FFFFFF', borderRadius: 24, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', position: 'relative' },
-  idCardHeader: { backgroundColor: '#004085', paddingVertical: 24, paddingHorizontal: 16, position: 'relative' },
-  idCardPhoto: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: '#FFFFFF', marginTop: -60, backgroundColor: '#F1F5F9' },
+  idCardContainer: { width: 300, backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', position: 'relative', boxShadow: '0 10px 25px rgba(0,0,0,0.06)' },
+  idCardHeader: { backgroundColor: '#004085', paddingVertical: 20, paddingHorizontal: 16, position: 'relative' },
+  idCardPhoto: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: '#FFFFFF', marginTop: -50, backgroundColor: '#F1F5F9' },
   
-  roleBtn: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, borderWidth: 2, borderColor: 'transparent' },
-  roleBtnActive: { backgroundColor: '#FFFFFF', borderColor: '#004085', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
-  roleBtnText: { fontSize: 15, fontWeight: '700', color: '#64748B' },
+  roleBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: 'transparent' },
+  roleBtnActive: { backgroundColor: '#FFFFFF', borderColor: '#004085', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
+  roleBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   roleBtnTextActive: { color: '#004085' },
-  wizardProgress: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, marginBottom: 24, marginTop: 12 },
-  adminCardTitle: { fontSize: 18, fontWeight: '800', color: '#004085', marginBottom: 4, letterSpacing: -0.5 },
-  adminCardMeta: { fontSize: 14, color: '#64748B', fontWeight: '500', marginBottom: 8 },
-  actionBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#F8FAFC', marginLeft: 8, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-  actionBtnText: { fontSize: 13, fontWeight: '700', color: '#004085' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#F1F5F9', marginHorizontal: 0, marginVertical: 16, borderRadius: 12, padding: 6, borderWidth: 1, borderColor: '#E2E8F0' },
-  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8 },
-  tabBtnActive: { backgroundColor: '#FFFFFF', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
-  tabBtnText: { fontWeight: '700', color: '#64748B', fontSize: 14 },
-  tabBtnTextActive: { color: '#004085' },
-  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 39, 82, 0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalCard: { backgroundColor: '#FFFFFF', width: '90%', maxWidth: 500, padding: 32, borderRadius: 24, elevation: 0, borderWidth: 1, borderColor: '#E2E8F0' },
+  wizardProgress: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20, marginTop: 8 },
+  adminCardTitle: { fontSize: 16, fontWeight: '600', color: '#004085', marginBottom: 4 },
+  adminCardMeta: { fontSize: 13, color: '#64748B', fontWeight: '400', marginBottom: 8 },
+  actionBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#F8FAFC', marginLeft: 8, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  actionBtnText: { fontSize: 12, fontWeight: '600', color: '#004085' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#F1F5F9', marginHorizontal: 0, marginVertical: 16, borderRadius: 10, padding: 4, borderWidth: 1, borderColor: '#E2E8F0' },
+  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
+  tabBtnActive: { backgroundColor: '#FFFFFF', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' },
+  tabBtnText: { fontWeight: '500', color: '#64748B', fontSize: 13 },
+  tabBtnTextActive: { color: '#004085', fontWeight: '600' },
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 39, 82, 0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(3px)' },
+  modalCard: { backgroundColor: '#FFFFFF', width: '90%', maxWidth: 450, padding: 32, borderRadius: 20, elevation: 0, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  checkbox: { width: 28, height: 28, borderWidth: 2, borderColor: '#CBD5E1', borderRadius: 8, marginRight: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
+  checkbox: { width: 24, height: 24, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, marginRight: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
   checkboxActive: { backgroundColor: '#004085', borderColor: '#004085' },
-  detailTxt: { fontSize: 15, color: '#475569', marginBottom: 8, fontWeight: '500' },
+  detailTxt: { fontSize: 14, color: '#475569', marginBottom: 8, fontWeight: '400' },
+  chartCard: { backgroundColor: '#FFFFFF', flexBasis: '48%', flexGrow: 1, minWidth: 300, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)' },
 });
