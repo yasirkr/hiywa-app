@@ -208,12 +208,10 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
                   </>
                 )}
                 {(hasPerm('MANAGE_FINANCE') || isCore) && (
-                  <>
-                    <NavButton title="Finance Ledger" icon="💵" viewId="admin_finance" />
-                    <NavButton title="Trust Expenses" icon="💸" viewId="admin_expense" />
-                  </>
+                  <NavButton title="Finance Ledger" icon="💵" viewId="admin_finance" />
                 )}
                 {(hasPerm('MANAGE_CAMPAIGNS') || isCore) && <NavButton title="Campaign Control" icon="📢" viewId="admin_campaigns" />}
+                {(hasPerm('MANAGE_USERS') || hasPerm('MANAGE_FINANCE') || isCore) && <NavButton title="Reports Central" icon="📑" viewId="admin_reports" />}
                 {isCore && <NavButton title="System Settings" icon="⚙️" viewId="admin_settings" />}
               </View>
             )}
@@ -230,30 +228,32 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
 
 
       <View style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
-        {currentView !== 'register' && currentView !== 'adminRegister' && (
+        {currentView !== 'register' && (
           <View style={styles.contentHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {isMobile && (
-                <TouchableOpacity onPress={() => setIsOpen(true)} style={{ marginRight: 16, padding: 8 }}>
-                  <Text style={{ fontSize: 24, color: '#004085' }}>☰</Text>
-                </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                {isMobile && (
+                  <TouchableOpacity onPress={() => setIsOpen(true)} style={{ marginRight: 12, padding: 8 }}>
+                    <Text style={{ fontSize: 24, color: '#004085' }}>☰</Text>
+                  </TouchableOpacity>
+                )}
+                <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} />
+                <View style={{ flexShrink: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIDHAYATHUL ISLAM YOUTH WELFARE ASSOCIATION</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text>
+                </View>
+              </View>
+
+              {currentUser && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 16 }}>
+                   {!isMobile && <Text style={{ marginRight: 10, fontWeight: '800', color: '#004085', fontSize: 11, textTransform: 'uppercase' }}>{currentUser.full_name}</Text>}
+                   {currentUser.profile_photo ? (
+                      <Image source={{uri: currentUser.profile_photo}} style={{width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: '#CBD5E1'}} />
+                   ) : (
+                      <View style={{width: 38, height: 38, borderRadius: 19, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1'}}><Text style={{fontSize: 16}}>👤</Text></View>
+                   )}
+                </View>
               )}
-              <Text style={styles.contentTitle}>
-                {currentView === 'dashboard' ? 'Overview' : 
-                 currentView === 'admin_stats' ? 'Overview Stats' :
-                 currentView === 'admin_users' ? 'Member Directory' :
-                 currentView === 'admin_students' ? 'Student Directory' :
-                 currentView === 'admin_finance' ? 'Finance Ledger' :
-                 currentView === 'admin_expense' ? 'Trust Expenses' :
-                 currentView === 'admin_campaigns' ? 'Campaign Control' :
-                 currentView === 'admin_settings' ? 'System Settings' :
-                 currentView === 'admin_roles' ? 'Admin Roles' :
-                 currentView === 'donate' ? 'General Donation' :
-                 currentView === 'subscription' ? 'My Subscriptions' :
-                 currentView === 'fundraising' ? 'Fund Drives' :
-                 currentView === 'campaignDetail' ? 'Campaign Details' :
-                 currentView === 'receipt' ? 'Official Receipt' : 'Portal'}
-              </Text>
             </View>
           </View>
         )}
@@ -343,7 +343,7 @@ function MainAppContent() {
     <DashboardLayout currentUser={currentUser} currentView={currentView} setCurrentView={setCurrentView} onLogout={() => { setCurrentUser(null); setCurrentView('login'); }}>
       {currentView === 'dashboard' && <UserDashboard currentUser={currentUser} setCurrentUser={setCurrentUser} onNavigate={handleDashboardNav} onViewReceipt={(txn) => { setSelectedReceipt(txn); setReceiptBackView('dashboard'); setCurrentView('receipt'); }} />}
       
-      {(currentView === 'admin_stats' || currentView === 'admin_users' || currentView === 'admin_students' || currentView === 'admin_finance' || currentView === 'admin_campaigns' || currentView === 'admin_expense' || currentView === 'admin_settings' || currentView === 'admin_roles') && 
+      {(currentView === 'admin_stats' || currentView === 'admin_users' || currentView === 'admin_students' || currentView === 'admin_finance' || currentView === 'admin_campaigns' || currentView === 'admin_reports' || currentView === 'admin_settings' || currentView === 'admin_roles') && 
         <AdminDashboard currentUser={currentUser} activeTab={currentView.replace('admin_', '').toUpperCase()} onNavigate={handleDashboardNav} onViewReceipt={(txn) => { setSelectedReceipt(txn); setReceiptBackView(currentView); setCurrentView('receipt'); }} />
       }
       
@@ -390,8 +390,8 @@ function LoginScreen({ onNavigate, onLogin }) {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forcePassUser, setForcePassUser] = useState(null);
+  const [allowPublicReg, setAllowPublicReg] = useState(false); // NEW STATE
   
-  // States for Reset Popup & Eye Icons
   const [showResetAlert, setShowResetAlert] = useState(true);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -399,6 +399,12 @@ function LoginScreen({ onNavigate, onLogin }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try { const sDoc = await getDoc(doc(db, 'settings', 'global')); if(sDoc.exists()) setAllowPublicReg(sDoc.data().allow_public_registration === true); } catch(e){}
+    };
+    fetchSettings();
+  }, []);
 
   const handleLogin = async () => {
     if (!loginId || !password) return alert('Please enter your Official Login ID and password');
@@ -408,17 +414,11 @@ function LoginScreen({ onNavigate, onLogin }) {
       if (userSnap.exists()) {
         const userData = userSnap.data();
         if (userData.password === password) {
-          if (password === 'Hiywa@123') {
-             setForcePassUser(userData);
-             setShowResetAlert(true);
-          } else {
-             onLogin(userData);
-          }
+          if (password === 'Hiywa@123') { setForcePassUser(userData); setShowResetAlert(true); } else { onLogin(userData); }
         } else alert('Login Failed: Incorrect Password');
       } else alert('Login Failed: Official ID not found');
     } catch (error) { alert('Login error: ' + error.message); } finally { setIsSubmitting(false); }
   };
-
 
   const submitNewPassword = async () => {
     if (newPassword.length < 6) return alert('Password must be at least 6 characters long.');
@@ -431,72 +431,37 @@ function LoginScreen({ onNavigate, onLogin }) {
     } catch (error) { alert('Failed to update password: ' + error.message); } finally { setIsSubmitting(false); }
   };
 
-
   if (forcePassUser) {
-    if (showResetAlert) {
-      return (
-        <View style={styles.authContainer}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalCard, {alignItems: 'center', zIndex: 1000}]}>
-              <Text style={{fontSize: 48, marginBottom: 16}}>⚠️</Text>
-              <Text style={{fontSize: 22, fontWeight: '900', color: '#004085', marginBottom: 12, textAlign: 'center'}}>Password Update Required</Text>
-              <Text style={{fontSize: 15, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22}}>For security reasons, you must change your default password before accessing the portal.</Text>
-              <TouchableOpacity style={[styles.button, {width: '100%'}]} onPress={() => setShowResetAlert(false)}>
-                <Text style={styles.buttonText}>OK, Change Password</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      );
-    }
-
-
+    if (showResetAlert) return ( <View style={styles.authContainer}><View style={styles.modalOverlay}><View style={[styles.modalCard, {alignItems: 'center', zIndex: 1000}]}><Text style={{fontSize: 48, marginBottom: 16}}>⚠️</Text><Text style={{fontSize: 22, fontWeight: '900', color: '#004085', marginBottom: 12, textAlign: 'center'}}>Password Update Required</Text><Text style={{fontSize: 15, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22}}>For security reasons, you must change your default password before accessing the portal.</Text><TouchableOpacity style={[styles.button, {width: '100%'}]} onPress={() => setShowResetAlert(false)}><Text style={styles.buttonText}>OK, Change Password</Text></TouchableOpacity></View></View></View> );
     return (
       <KeyboardAvoidingView style={styles.authContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.authCard}>
-          <Text style={styles.authTitle}>Update Required</Text>
-          <Text style={styles.authSubtitle}>Create a new secure password.</Text>
-          
+          <Text style={styles.authTitle}>Update Required</Text><Text style={styles.authSubtitle}>Create a new secure password.</Text>
           <Text style={styles.label}>New Password</Text>
-          <View style={{ position: 'relative' }}>
-            <TextInput style={[styles.input, { paddingRight: 40 }]} secureTextEntry={!showNewPassword} value={newPassword} onChangeText={setNewPassword} />
-            <TouchableOpacity style={{ position: 'absolute', right: 15, top: 18, zIndex: 1 }} onPress={() => setShowNewPassword(!showNewPassword)}>
-              <Text style={{ fontSize: 18 }}>{showNewPassword ? '🙈' : '👁️'}</Text>
-            </TouchableOpacity>
-          </View>
-          
+          <View style={{ position: 'relative' }}><TextInput style={[styles.input, { paddingRight: 40 }]} secureTextEntry={!showNewPassword} value={newPassword} onChangeText={setNewPassword} /><TouchableOpacity style={{ position: 'absolute', right: 15, top: 18, zIndex: 1 }} onPress={() => setShowNewPassword(!showNewPassword)}><Text style={{ fontSize: 18 }}>{showNewPassword ? '🙈' : '👁️'}</Text></TouchableOpacity></View>
           <Text style={styles.label}>Confirm New Password</Text>
-          <View style={{ position: 'relative' }}>
-            <TextInput style={[styles.input, { paddingRight: 40 }]} secureTextEntry={!showConfirmPassword} value={confirmPassword} onChangeText={setConfirmPassword} />
-            <TouchableOpacity style={{ position: 'absolute', right: 15, top: 18, zIndex: 1 }} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-              <Text style={{ fontSize: 18 }}>{showConfirmPassword ? '🙈' : '👁️'}</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <TouchableOpacity style={styles.button} onPress={submitNewPassword} disabled={isSubmitting}>
-            {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Save & Login</Text>}
-          </TouchableOpacity>
+          <View style={{ position: 'relative' }}><TextInput style={[styles.input, { paddingRight: 40 }]} secureTextEntry={!showConfirmPassword} value={confirmPassword} onChangeText={setConfirmPassword} /><TouchableOpacity style={{ position: 'absolute', right: 15, top: 18, zIndex: 1 }} onPress={() => setShowConfirmPassword(!showConfirmPassword)}><Text style={{ fontSize: 18 }}>{showConfirmPassword ? '🙈' : '👁️'}</Text></TouchableOpacity></View>
+          <TouchableOpacity style={styles.button} onPress={submitNewPassword} disabled={isSubmitting}>{isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Save & Login</Text>}</TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     );
   }
 
-
   return (
     <KeyboardAvoidingView style={styles.authContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.authCard}>
         <View style={{ alignItems: 'center', marginBottom: 15 }}><Image source={require('./hiywalogo.png')} style={{ width: 120, height: 120, borderRadius: 16 }} resizeMode="contain" /></View>
-        <Text style={styles.authTitle}>HIYWA Connect</Text>
-        <Text style={styles.authSubtitle}>Secure Member Portal</Text>
+        <Text style={styles.authTitle}>HIYWA Connect</Text><Text style={styles.authSubtitle}>Secure Member Portal</Text>
         <Text style={styles.label}>Official Login ID</Text>
         <TextInput style={styles.input} autoCapitalize="characters" value={loginId} onChangeText={(t) => setLoginId(t.replace(/\s/g, ''))} />
         <Text style={styles.label}>Password</Text>
-        <View style={{ position: 'relative' }}>
-          <TextInput style={[styles.input, { paddingRight: 40 }]} secureTextEntry={!showPassword} value={password} onChangeText={setPassword} />
-          <TouchableOpacity style={{ position: 'absolute', right: 15, top: 18, zIndex: 1 }} onPress={() => setShowPassword(!showPassword)}><Text style={{ fontSize: 18 }}>{showPassword ? '🙈' : '👁️'}</Text></TouchableOpacity>
-        </View>
+        <View style={{ position: 'relative' }}><TextInput style={[styles.input, { paddingRight: 40 }]} secureTextEntry={!showPassword} value={password} onChangeText={setPassword} /><TouchableOpacity style={{ position: 'absolute', right: 15, top: 18, zIndex: 1 }} onPress={() => setShowPassword(!showPassword)}><Text style={{ fontSize: 18 }}>{showPassword ? '🙈' : '👁️'}</Text></TouchableOpacity></View>
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={isSubmitting}>{isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Secure Login</Text>}</TouchableOpacity>
-        <TouchableOpacity style={{ marginTop: 24, alignItems: 'center' }} onPress={() => onNavigate('register')}><Text style={{ color: '#004085', fontWeight: '800' }}>New Member? Register Here</Text></TouchableOpacity>
+        
+        {/* NEW CONDITIONAL RENDERING FOR PUBLIC REGISTRATION */}
+        {allowPublicReg && (
+           <TouchableOpacity style={{ marginTop: 24, alignItems: 'center' }} onPress={() => onNavigate('register')}><Text style={{ color: '#004085', fontWeight: '800' }}>New Member? Register Here</Text></TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -543,8 +508,8 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
 
   const pickImage = () => {
     Alert.alert("Upload Photo", "Choose an option", [
-      { text: "Take Photo (Camera)", onPress: async () => { const permissionResult = await ImagePicker.requestCameraPermissionsAsync(); if (permissionResult.granted === false) return alert("Camera permission is required!"); let result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setProfileImage(b64); setEditFormData({...editFormData, profile_photo: b64}); } } },
-      { text: "Choose from Gallery", onPress: async () => { if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); } let result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setProfileImage(b64); setEditFormData({...editFormData, profile_photo: b64}); } } },
+      { text: "Take Photo", onPress: async () => { let r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!r.canceled && r.assets[0].base64) { if(r.assets[0].base64.length > 950000) return alert("Photo too large! Please use a smaller image."); const b64 = `data:image/jpeg;base64,${r.assets[0].base64}`; setProfileImage(b64); setEditFormData({...editFormData, profile_photo: b64}); } } },
+      { text: "Choose from Gallery", onPress: async () => { let r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!r.canceled && r.assets[0].base64) { if(r.assets[0].base64.length > 950000) return alert("Photo too large! Please use a smaller image."); const b64 = `data:image/jpeg;base64,${r.assets[0].base64}`; setProfileImage(b64); setEditFormData({...editFormData, profile_photo: b64}); } } },
       { text: "Cancel", style: "cancel" }
     ]);
   };
@@ -581,31 +546,21 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
     const displayAadhaar = editFormData.aadhaar_number || editFormData.aadhar_number || '';
     const isCollegeEdit = ['UG - BACHELORS', 'PG - MASTERS', 'PHD', 'ITI / DIPLOMA'].includes(editFormData.class_grade);
 
-    // ALERT LOGIC FOR BACK BUTTON
     const handleCancelProfileEdit = () => {
-      confirmAction(
-        "Discard Changes?", 
-        "Are you sure you want to go back? Any unsaved changes will be lost.", 
-        () => setIsEditingProfile(false), 
-        "Discard", 
-        true
-      );
+      const isChanged = Object.keys(editFormData).some(key => editFormData[key] !== currentUser[key]);
+      if (!isChanged) return setIsEditingProfile(false);
+      confirmAction("Discard Changes?", "Are you sure you want to go back? Any unsaved changes will be lost.", () => setIsEditingProfile(false), "Discard", true);
     };
 
-    // RESPONSIVE GRID & SHADE STYLES
-    const wrapStyle = { flex: 1, minWidth: 260 }; 
+    const wrapStyle = { flex: 1, minWidth: 260, position: 'relative' }; 
     const dropStyle = [styles.dropdownBtn, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }];
 
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{ padding: 24 }}>
           <View style={styles.formCard}>
-            
-            {/* STANDARDIZED TOP ACTION BAR */}
             <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}>
-              <TouchableOpacity style={styles.neatBtnDark} onPress={handleCancelProfileEdit}>
-                <Text style={styles.neatBtnTextDark}>← Back</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={styles.neatBtnDark} onPress={handleCancelProfileEdit}><Text style={styles.neatBtnTextDark}>← Back</Text></TouchableOpacity>
               <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Edit My Profile</Text>
             </View>
 
@@ -617,17 +572,17 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
             </View>
 
             <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 10}]}>Personal Details</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 100 }}>
               <View style={wrapStyle}><Text style={styles.label}>Full Name</Text><TextInput style={styles.input} value={editFormData.full_name || ''} onChangeText={t=>setEditFormData({...editFormData, full_name: t})} /></View>
               <View style={wrapStyle}><Text style={styles.label}>Father's Name</Text><TextInput style={styles.input} value={editFormData.father_name || ''} onChangeText={t=>setEditFormData({...editFormData, father_name: t})} /></View>
               <View style={wrapStyle}><Text style={styles.label}>Mother's Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={editFormData.mother_name || ''} onChangeText={t => setEditFormData({...editFormData, mother_name: t})} /></View>
               
-              <View style={wrapStyle}><Text style={styles.label}>Parents Status</Text>
+              <View style={[wrapStyle, {zIndex: editParentsDrop ? 100 : 1}]}><Text style={styles.label}>Parents Status</Text>
               <TouchableOpacity style={dropStyle} onPress={() => setEditParentsDrop(!editParentsDrop)}><Text style={styles.dropdownBtnText}>{editFormData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
               {editParentsDrop && <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => (<TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setEditFormData({...editFormData, parents_status: s}); setEditParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity>))}</View>}
               </View>
 
-              <View style={wrapStyle}><Text style={styles.label}>Gender</Text>
+              <View style={[wrapStyle, {zIndex: editGenderDrop ? 100 : 1}]}><Text style={styles.label}>Gender</Text>
               <TouchableOpacity style={dropStyle} onPress={() => setEditGenderDrop(!editGenderDrop)}><Text style={styles.dropdownBtnText}>{editFormData.gender || 'Select Gender'}</Text></TouchableOpacity>
               {editGenderDrop && <View style={styles.dropdownList}>{GENDERS.map(g => <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, gender: g}); setEditGenderDrop(false);}}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>)}</View>}
               </View>
@@ -636,7 +591,7 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
               {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formattedDob} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} /> : <TextInput style={styles.input} value={formattedDob} onChangeText={t=>setEditFormData({...editFormData, dob: t})} placeholder="YYYY-MM-DD" />}
               </View>
 
-              <View style={wrapStyle}><Text style={styles.label}>Blood Group</Text>
+              <View style={[wrapStyle, {zIndex: editBloodDrop ? 100 : 1}]}><Text style={styles.label}>Blood Group</Text>
               <TouchableOpacity style={dropStyle} onPress={() => setEditBloodDrop(!editBloodDrop)}><Text style={styles.dropdownBtnText}>{editFormData.blood_group || 'Select Blood Group'}</Text></TouchableOpacity>
               {editBloodDrop && <View style={styles.dropdownList}>{BLOOD_GROUPS.map(bg => <TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, blood_group: bg}); setEditBloodDrop(false);}}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>)}</View>}
               </View>
@@ -647,12 +602,12 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
             </View>
 
             <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Contact & Location</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 90 }}>
               <View style={wrapStyle}><Text style={styles.label}>Phone Number</Text><TextInput style={styles.input} value={editFormData.phone_number || ''} onChangeText={t=>setEditFormData({...editFormData, phone_number: t})} keyboardType="numeric" /></View>
               <View style={wrapStyle}><Text style={styles.label}>WhatsApp Number</Text><TextInput style={styles.input} value={editFormData.whatsapp_number || ''} onChangeText={t=>setEditFormData({...editFormData, whatsapp_number: t})} keyboardType="numeric" /></View>
               <View style={wrapStyle}><Text style={styles.label}>Email</Text><TextInput style={styles.input} value={editFormData.email || ''} onChangeText={t=>setEditFormData({...editFormData, email: t})} /></View>
 
-              <View style={wrapStyle}><Text style={styles.label}>Native Place</Text>
+              <View style={[wrapStyle, {zIndex: editNativeDrop ? 100 : 1}]}><Text style={styles.label}>Native Place</Text>
               <TouchableOpacity style={dropStyle} onPress={() => setEditNativeDrop(!editNativeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.native_place || 'Select Native Place'}</Text></TouchableOpacity>
               {editNativeDrop && <View style={styles.dropdownList}>{NATIVE_PLACES.map(np => <TouchableOpacity key={np} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, native_place: np}); setEditNativeDrop(false);}}><Text style={styles.dropdownItemText}>{np}</Text></TouchableOpacity>)}</View>}
               </View>
@@ -662,10 +617,10 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
             </View>
 
             <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Education & Occupation</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
-              {editFormData.role === 'MEMBER' && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 80 }}>
+              {(editFormData.role === 'MEMBER' || editFormData.role === 'ADMIN') && (
                 <>
-                  <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                  <View style={[wrapStyle, {zIndex: editEduDrop ? 100 : 1}]}><Text style={styles.label}>Education Category</Text>
                   <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Education'}</Text></TouchableOpacity>
                   {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
                   </View>
@@ -675,28 +630,23 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
               )}
               {editFormData.role === 'STUDENT' && (
                 <>
-                  <View style={wrapStyle}><Text style={styles.label}>Class / Grade</Text>
+                  <View style={[wrapStyle, {zIndex: editClassDrop ? 100 : 1}]}><Text style={styles.label}>Class / Grade</Text>
                   <TouchableOpacity style={dropStyle} onPress={() => setEditClassDrop(!editClassDrop)}><Text style={styles.dropdownBtnText}>{editFormData.class_grade || 'Select Class / Grade'}</Text></TouchableOpacity>
                   {editClassDrop && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map(c => <TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, class_grade: c}); setEditClassDrop(false);}}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>)}</ScrollView></View>}
                   </View>
-
                   <View style={wrapStyle}><Text style={styles.label}>School / College Name</Text><TextInput style={styles.input} value={editFormData.school_name || ''} onChangeText={t=>setEditFormData({...editFormData, school_name: t})} /></View>
-
-                  <View style={wrapStyle}><Text style={styles.label}>Institution Type</Text>
+                  <View style={[wrapStyle, {zIndex: editSchoolTypeDrop ? 100 : 1}]}><Text style={styles.label}>Institution Type</Text>
                   <TouchableOpacity style={dropStyle} onPress={() => setEditSchoolTypeDrop(!editSchoolTypeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.school_type || 'Select Institution Type'}</Text></TouchableOpacity>
                   {editSchoolTypeDrop && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map(st => <TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, school_type: st}); setEditSchoolTypeDrop(false);}}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>)}</View>}
                   </View>
-
                   <View style={wrapStyle}><Text style={styles.label}>Institution Location</Text><TextInput style={styles.input} value={editFormData.school_location || ''} onChangeText={t=>setEditFormData({...editFormData, school_location: t})} /></View>
-
-                  <View style={wrapStyle}><Text style={styles.label}>Medium of Instruction</Text>
+                  <View style={[wrapStyle, {zIndex: editMediumDrop ? 100 : 1}]}><Text style={styles.label}>Medium of Instruction</Text>
                   <TouchableOpacity style={dropStyle} onPress={() => setEditMediumDrop(!editMediumDrop)}><Text style={styles.dropdownBtnText}>{editFormData.medium_of_instruction || 'Select Medium'}</Text></TouchableOpacity>
                   {editMediumDrop && <View style={styles.dropdownList}>{MEDIUMS.map(md => <TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, medium_of_instruction: md}); setEditMediumDrop(false);}}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>)}</View>}
                   </View>
-
                   {isCollegeEdit && (
                     <>
-                      <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                      <View style={[wrapStyle, {zIndex: editEduDrop ? 100 : 1}]}><Text style={styles.label}>Education Category</Text>
                       <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Category'}</Text></TouchableOpacity>
                       {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
                       </View>
@@ -707,14 +657,17 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
               )}
             </View>
 
-            <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Islamic Studies</Text>
-            <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
-               <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
-               <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
+            <View style={{ zIndex: 75, marginTop: 24 }}>
+              <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8}]}>Islamic Studies</Text>
+              <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
+                 <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
+                 <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
+              </View>
             </View>
+
             {editFormData.islamic_studies === 'YES' && (
-              <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0'}}>
-                <View style={wrapStyle}><Text style={styles.label}>Qualification</Text>
+              <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 70}}>
+                <View style={[wrapStyle, {zIndex: editIslamicDrop ? 100 : 1}]}><Text style={styles.label}>Qualification</Text>
                 <TouchableOpacity style={dropStyle} onPress={() => setEditIslamicDrop(!editIslamicDrop)}><Text style={styles.dropdownBtnText}>{editFormData.islamic_qualification || 'Select Qualification'}</Text></TouchableOpacity>
                 {editIslamicDrop && <View style={styles.dropdownList}>{ISLAMIC_QUALS.map(iq => <TouchableOpacity key={iq} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, islamic_qualification: iq}); setEditIslamicDrop(false);}}><Text style={styles.dropdownItemText}>{iq}</Text></TouchableOpacity>)}</View>}
                 </View>
@@ -726,7 +679,6 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
               </View>
             )}
 
-            {/* SAVE BUTTON AT BOTTOM */}
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 32 }}>
               <TouchableOpacity style={[styles.neatBtnSuccess, { paddingHorizontal: 32, paddingVertical: 14 }]} onPress={saveEditedProfile} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={[styles.neatBtnText, { fontSize: 15 }]}>💾 Save Profile Data</Text>}
@@ -740,41 +692,108 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
   }
 
 
+  const age = currentUser?.dob ? (new Date().getFullYear() - new Date(currentUser.dob).getFullYear()) : 'Unknown';
+  
+  // Calculate Pending Dues
+  const joinDate = currentUser?.join_date ? new Date(currentUser.join_date) : new Date();
+  const currentDate = new Date();
+  const monthsSinceJoined = ((currentDate.getFullYear() - joinDate.getFullYear()) * 12) + (currentDate.getMonth() - joinDate.getMonth()) + 1;
+  const totalPaid = parseInt(currentUser?.total_months_paid) || 0;
+  const duesMonths = Math.max(0, monthsSinceJoined - totalPaid);
+
   return (
     <ScrollView contentContainerStyle={{ padding: 24 }}>
-      
-      <View style={[styles.formCard, { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 24 }]}>
-        <View style={{ position: 'relative' }}>
-          {profileImage ? <Image source={{ uri: profileImage }} style={{ width: 120, height: 120, borderRadius: 60 }} /> : <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 40 }}>👤</Text></View>}
+      <View style={styles.formCard}>
+        <View style={{flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 20}}>
+            <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => {setEditFormData(currentUser); setIsEditingProfile(true);}}><Text style={styles.neatBtnText}>✏️ Edit Profile</Text></TouchableOpacity>
         </View>
 
+        <View style={{flexDirection: 'row', gap: 24, flexWrap: 'wrap'}}>
+          <View style={{alignItems: 'center', marginBottom: 15}}>
+             {currentUser?.profile_photo ? ( <Image source={{uri: currentUser.profile_photo}} style={{width: 150, height: 150, borderRadius: 75, borderWidth: 4, borderColor: '#F8FAFC'}} /> ) : ( <View style={{width: 150, height: 150, borderRadius: 75, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text style={{fontSize: 50}}>👤</Text></View> )}
+          </View>
 
-        <View style={{ flex: 1, minWidth: 250 }}>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: '#004085', letterSpacing: -0.5, marginBottom: 2 }}>{currentUser?.full_name}</Text>
-          <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>S/O {currentUser?.father_name || 'N/A'}</Text>
-          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: '500' }}>
-            ID: {currentUser?.official_id}  •  🩸 {currentUser?.blood_group || '-'}  •  📞 {currentUser?.phone_number}  •  📍 {currentUser?.native_place}
-          </Text>
-          
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <TouchableOpacity style={styles.neatBtnDark} onPress={() => {setEditFormData(currentUser); setIsEditingProfile(true);}}>
-              <Text style={styles.neatBtnTextDark}>✏️ Edit Profile</Text>
-            </TouchableOpacity>
+          <View style={{flex: 1, minWidth: 250}}>
+             <Text style={{fontSize: 22, fontWeight: '900', color: '#004085', marginBottom: 2, textTransform: 'uppercase'}}>{currentUser?.full_name} {currentUser?.is_core_admin && '👑'}</Text>
+             <Text style={{fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4}}>S/O {currentUser?.father_name || 'N/A'} & {currentUser?.mother_name || 'N/A'}</Text>
+             <Text style={{fontSize: 13, color: '#64748B', marginBottom: 16, fontWeight: '500'}}>Official ID: <Text style={{fontWeight: '800', color: '#004085'}}>{currentUser?.official_id}</Text></Text>
+             
+             <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24}}>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Status: {currentUser?.membership_status}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Role: {currentUser?.role}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Age: {age}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Gender: {currentUser?.gender || 'N/A'}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Blood: {currentUser?.blood_group || 'N/A'}</Text></View>
+             </View>
+
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Personal Information</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>DOB:</Text> {currentUser?.dob}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Aadhaar Number:</Text> {currentUser?.aadhaar_number}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Parents Status:</Text> {currentUser?.parents_status}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Marital Status:</Text> {currentUser?.marital_status || 'N/A'}</Text>
+             </View>
+
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Contact & Location</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Primary Mobile:</Text> {currentUser?.phone_number}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>WhatsApp:</Text> {currentUser?.whatsapp_number}</Text>
+                {currentUser?.role === 'STUDENT' && <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Student Mobile:</Text> {currentUser?.student_mobile}</Text>}
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Email:</Text> {currentUser?.email}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Native Place:</Text> {currentUser?.native_place}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Current City:</Text> {currentUser?.current_location}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Full Address:</Text> {currentUser?.address}</Text>
+             </View>
+
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Education & Occupation</Text>
+                {(currentUser?.role === 'MEMBER' || currentUser?.role === 'ADMIN') && (
+                  <>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Education Category:</Text> {currentUser?.educational_qualification}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Course/Major:</Text> {currentUser?.course_details}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Occupation/Job:</Text> {currentUser?.occupation}</Text>
+                  </>
+                )}
+                {currentUser?.role === 'STUDENT' && (
+                  <>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Class/Grade:</Text> {currentUser?.class_grade}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Institution:</Text> {currentUser?.school_name} ({currentUser?.school_type})</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Institution Location:</Text> {currentUser?.school_location}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Medium:</Text> {currentUser?.medium_of_instruction}</Text>
+                  </>
+                )}
+             </View>
+
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0'}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Islamic Background</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Status:</Text> {currentUser?.islamic_studies === 'YES' ? 'Completed/Pursuing' : 'No'}</Text>
+                {currentUser?.islamic_studies === 'YES' && (
+                  <>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Qualification:</Text> {currentUser?.islamic_qualification}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Madrasa:</Text> {currentUser?.madrasa_name} ({currentUser?.madrasa_location})</Text>
+                  </>
+                )}
+             </View>
           </View>
         </View>
       </View>
 
+      {/* SUBSCRIPTION DUES ALERT */}
+      {duesMonths > 0 && currentUser?.role !== 'STUDENT' && (
+        <TouchableOpacity style={[styles.alertRedBox, {borderColor: '#FCA5A5'}]} onPress={() => onNavigate('subscription')}>
+          <Text style={[styles.alertRedText, {color: '#B91C1C'}]}>⚠️ ACTION REQUIRED: You have {duesMonths} month(s) of pending subscription dues. Tap here to clear.</Text>
+        </TouchableOpacity>
+      )}
 
+      {/* ACTIVE CAMPAIGN ALERTS */}
       {activeCampaigns.map((camp) => (
         <TouchableOpacity key={camp.campaign_id} style={styles.alertRedBox} onPress={() => onNavigate('fundraising')}>
           <Text style={styles.alertRedText}>🚨 URGENT DRIVE: {camp.title} — Tap to support!</Text>
         </TouchableOpacity>
       ))}
 
-
+      {/* QUICK ACTIONS BENTO GRID */}
       <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Quick Actions</Text>
-
-
       <View style={styles.bentoGrid}>
         {currentUser?.role !== 'STUDENT' && (
            <TouchableOpacity style={styles.bentoBox} onPress={() => onNavigate('subscription')}>
@@ -795,7 +814,6 @@ function UserDashboard({ currentUser, setCurrentUser, onNavigate, onViewReceipt 
           </View>
           <View style={{ marginTop: 24, alignSelf: 'flex-start' }}><Text style={{ color: '#E11D48', fontWeight: '800', fontSize: 13 }}>DONATE ↗</Text></View>
         </TouchableOpacity>
-
 
         <TouchableOpacity style={styles.bentoBox} onPress={() => onNavigate('fundraising')}>
           <View>
@@ -843,6 +861,9 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [masterResetModal, setMasterResetModal] = useState(false);
+  const [masterResetPassword, setMasterResetPassword] = useState('');
+
 
   // --- NEW SETTINGS STATE ---
   const [subAmount, setSubAmount] = useState('100');
@@ -850,6 +871,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [secondaryUpi, setSecondaryUpi] = useState('');
   const [initialAmount, setInitialAmount] = useState('0');
   const [configModalPassword, setConfigModalPassword] = useState('');
+  const [allowPublicReg, setAllowPublicReg] = useState(false);
 
 
   // --- NEW EXPENSE STATE ---
@@ -879,12 +901,49 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [filters, setFilters] = useState({ blood: '', edu: '', gender: '', native: '', marital: '', status: '', islamic: '' });
 
 
-  const [financeTab, setFinanceTab] = useState('LEDGER');
-  const [showFinFilters, setShowFinFilters] = useState(false);
   const [finSearchQuery, setFinSearchQuery] = useState('');
-  const [finTypeFilter, setFinTypeFilter] = useState('');
-  const [finStartDate, setFinStartDate] = useState('');
-  const [finEndDate, setFinEndDate] = useState('');
+  const [showDuesModal, setShowDuesModal] = useState(false);
+  const [ledgerTab, setLedgerTab] = useState('INCOME');
+  const [repType, setRepType] = useState('DIRECTORY');
+  const [repRole, setRepRole] = useState('');
+  const [repStatus, setRepStatus] = useState('');
+  const [repBlood, setRepBlood] = useState('');
+  const [repGender, setRepGender] = useState('');
+  const [repFinType, setRepFinType] = useState('');
+  const [repStartDate, setRepStartDate] = useState('');
+  const [repEndDate, setRepEndDate] = useState('');
+
+  const filteredRepDir = directory.filter(u => {
+     if (repRole && u.role !== repRole) return false;
+     if (repStatus && u.membership_status !== repStatus) return false;
+     if (repBlood && u.blood_group !== repBlood) return false;
+     if (repGender && u.gender !== repGender) return false;
+     return true;
+  });
+
+  const filteredRepFin = globalTxns.filter(t => {
+     if (repFinType && t.donation_type !== repFinType) return false;
+     if (repStartDate && new Date(t.transaction_date).getTime() < new Date(repStartDate).getTime()) return false;
+     if (repEndDate && new Date(t.transaction_date).getTime() > new Date(repEndDate).getTime() + 86400000) return false;
+     return true;
+  });
+
+  const exportDirectory = () => {
+     const header = "ID,Name,Role,Status,Phone,Age,Blood Group,Native Place,Education,Occupation,Address\n";
+     const rows = filteredRepDir.map(u => {
+        const uAge = u.dob ? (new Date().getFullYear() - new Date(u.dob).getFullYear()) : 'N/A';
+        return `"${u.official_id}","${u.full_name}","${u.role}","${u.membership_status}","${u.phone_number}","${uAge}","${u.blood_group || ''}","${u.native_place || ''}","${u.educational_qualification || ''}","${u.occupation || ''}","${(u.address || '').replace(/"/g, '""')}"`;
+     }).join("\n");
+     downloadCSV(header + rows, "HIYWA_Directory_Report.csv");
+  };
+
+  const exportFinance = () => {
+     const header = "Date & Time,Txn ID,Member ID,Member Name,Type,Amount,Method,Reason\n";
+     const rows = filteredRepFin.map(t => {
+        return `"${new Date(t.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}","${t.transaction_id}","${t.member_id}","${t.full_name}","${t.donation_type}","${t.amount}","${t.payment_method}","${(t.reason || '').replace(/"/g, '""')}"`;
+     }).join("\n");
+     downloadCSV(header + rows, "HIYWA_Finance_Report.csv");
+  };
 
 
   // Dropdown States for Editing
@@ -929,6 +988,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
       if (hasPerm('MANAGE_FINANCE') || isCore || activeTab === 'SETTINGS' || activeTab === 'EXPENSE') {
         const txnsSnap = await getDocs(collection(db, 'transactions'));
         setGlobalTxns(txnsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        
         const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
         if (settingsDoc.exists()) {
            const d = settingsDoc.data();
@@ -936,6 +996,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
            setPrimaryUpi(d.primary_upi || '');
            setSecondaryUpi(d.secondary_upi || '');
            setInitialAmount(d.initial_amount || '0');
+           setAllowPublicReg(d.allow_public_registration || false); // <-- CORRECT PLACEMENT
         }
       }
       if (hasPerm('MANAGE_CAMPAIGNS') || isCore) {
@@ -1008,13 +1069,14 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const allExpenses = globalTxns.filter(t => t.donation_type === 'EXPENSE');
 
 
-  const filteredTxns = allIncomes.filter(t => {
-    if (finStartDate && new Date(t.transaction_date).getTime() < new Date(finStartDate).getTime()) return false;
-    if (finEndDate && new Date(t.transaction_date).getTime() > new Date(finEndDate).getTime() + 86400000) return false;
-    if (finTypeFilter) { if (finTypeFilter === 'FUND_RAISING' && t.donation_type !== 'FUND_RAISING' && t.donation_type !== 'CAMPAIGN') return false; if (finTypeFilter !== 'FUND_RAISING' && t.donation_type !== finTypeFilter) return false; }
-    if (finSearchQuery) { const q = finSearchQuery.toLowerCase(); const strTxnId = t.transaction_id ? String(t.transaction_id) : ''; if (!t.full_name?.toLowerCase().includes(q) && !strTxnId.toLowerCase().includes(q) && !t.reason?.toLowerCase().includes(q)) return false; }
-    return true;
-  });
+  const searchQ = finSearchQuery.toLowerCase();
+  const searchFilter = (t) => {
+    if (!finSearchQuery) return true;
+    const strTxnId = t.transaction_id ? String(t.transaction_id) : '';
+    return t.full_name?.toLowerCase().includes(searchQ) || strTxnId.toLowerCase().includes(searchQ) || t.reason?.toLowerCase().includes(searchQ);
+  };
+  const filteredIncomes = allIncomes.filter(searchFilter).sort((a,b)=> new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
+  const filteredExpensesList = allExpenses.filter(searchFilter).sort((a,b)=> new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
 
 
   const pendingDuesList = directory.filter(u => !u.is_core_admin && (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE').map(u => {
@@ -1083,6 +1145,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
     if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); }
     let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true });
     if (!result.canceled && result.assets[0].base64) {
+      if (result.assets[0].base64.length > 950000) return alert("Photo too large! Please use a smaller/compressed image.");
       const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
       try { await updateDoc(doc(db, 'members', officialId), { profile_photo: b64 }); alert('Photo uploaded!'); setSelectedDetailUser({...selectedDetailUser, profile_photo: b64}); fetchData(); } catch (e) { alert('Error saving photo.'); }
     }
@@ -1173,7 +1236,11 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
       const membersSnap = await getDocs(collection(db, 'members'));
       let deletedMembers = 0;
       for (const docSnap of membersSnap.docs) {
-        if (docSnap.data().is_core_admin === true) continue;
+        if (docSnap.data().is_core_admin === true) {
+           // CRITICAL FIX: Reset the Core Admin's paid months back to 0 so they don't carry over!
+           await updateDoc(doc(db, 'members', docSnap.id), { total_months_paid: 0 });
+           continue; 
+        }
         await deleteDoc(doc(db, 'members', docSnap.id));
         deletedMembers++;
       }
@@ -1212,28 +1279,19 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
       const displayAadhaar = editFormData.aadhaar_number || editFormData.aadhar_number || '';
       const isCollegeEdit = ['UG - BACHELORS', 'PG - MASTERS', 'PHD', 'ITI / DIPLOMA'].includes(editFormData.class_grade);
 
-      // ALERT LOGIC FOR BACK BUTTON
       const handleCancelEdit = () => {
-        confirmAction(
-          "Discard Changes?", 
-          "Are you sure you want to go back? Any unsaved changes will be lost.", 
-          () => setIsEditingUser(false), 
-          "Discard", 
-          true
-        );
+        const isChanged = Object.keys(editFormData).some(key => editFormData[key] !== selectedDetailUser[key]);
+        if (!isChanged) return setIsEditingUser(false);
+        confirmAction("Discard Changes?", "Are you sure you want to go back? Any unsaved changes will be lost.", () => setIsEditingUser(false), "Discard", true);
       };
 
-      // RESPONSIVE GRID & SHADE STYLES
-      const wrapStyle = { flex: 1, minWidth: 260 }; 
+      const wrapStyle = { flex: 1, minWidth: 260, position: 'relative' }; 
       const dropStyle = [styles.dropdownBtn, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }];
 
       return (
         <View style={styles.formCard}>
-          {/* STANDARDIZED TOP ACTION BAR */}
           <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}>
-            <TouchableOpacity style={styles.neatBtnDark} onPress={handleCancelEdit}>
-              <Text style={styles.neatBtnTextDark}>← Back</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.neatBtnDark} onPress={handleCancelEdit}><Text style={styles.neatBtnTextDark}>← Back</Text></TouchableOpacity>
             <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Edit {u.full_name}</Text>
           </View>
 
@@ -1245,17 +1303,17 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           </View>
 
           <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 10}]}>Personal Details</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 100 }}>
             <View style={wrapStyle}><Text style={styles.label}>Full Name</Text><TextInput style={styles.input} value={editFormData.full_name || ''} onChangeText={t=>setEditFormData({...editFormData, full_name: t})} /></View>
             <View style={wrapStyle}><Text style={styles.label}>Father's Name</Text><TextInput style={styles.input} value={editFormData.father_name || ''} onChangeText={t=>setEditFormData({...editFormData, father_name: t})} /></View>
             <View style={wrapStyle}><Text style={styles.label}>Mother's Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={editFormData.mother_name || ''} onChangeText={t => setEditFormData({...editFormData, mother_name: t})} /></View>
             
-            <View style={wrapStyle}><Text style={styles.label}>Parents Status</Text>
+            <View style={[wrapStyle, {zIndex: editParentsDrop ? 100 : 1}]}><Text style={styles.label}>Parents Status</Text>
             <TouchableOpacity style={dropStyle} onPress={() => setEditParentsDrop(!editParentsDrop)}><Text style={styles.dropdownBtnText}>{editFormData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
             {editParentsDrop && <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => (<TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setEditFormData({...editFormData, parents_status: s}); setEditParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity>))}</View>}
             </View>
 
-            <View style={wrapStyle}><Text style={styles.label}>Gender</Text>
+            <View style={[wrapStyle, {zIndex: editGenderDrop ? 100 : 1}]}><Text style={styles.label}>Gender</Text>
             <TouchableOpacity style={dropStyle} onPress={() => setEditGenderDrop(!editGenderDrop)}><Text style={styles.dropdownBtnText}>{editFormData.gender || 'Select Gender'}</Text></TouchableOpacity>
             {editGenderDrop && <View style={styles.dropdownList}>{GENDERS.map(g => <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, gender: g}); setEditGenderDrop(false);}}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>)}</View>}
             </View>
@@ -1264,12 +1322,12 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formattedDob} onChange={(e) => setEditFormData({...editFormData, dob: e.target.value})} /> : <TextInput style={styles.input} value={formattedDob} onChangeText={t=>setEditFormData({...editFormData, dob: t})} placeholder="YYYY-MM-DD" />}
             </View>
 
-            <View style={wrapStyle}><Text style={styles.label}>Blood Group</Text>
+            <View style={[wrapStyle, {zIndex: editBloodDrop ? 100 : 1}]}><Text style={styles.label}>Blood Group</Text>
             <TouchableOpacity style={dropStyle} onPress={() => setEditBloodDrop(!editBloodDrop)}><Text style={styles.dropdownBtnText}>{editFormData.blood_group || 'Select Blood Group'}</Text></TouchableOpacity>
             {editBloodDrop && <View style={styles.dropdownList}>{BLOOD_GROUPS.map(bg => <TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, blood_group: bg}); setEditBloodDrop(false);}}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>)}</View>}
             </View>
 
-            <View style={wrapStyle}><Text style={styles.label}>Marital Status</Text>
+            <View style={[wrapStyle, {zIndex: editMaritalDrop ? 100 : 1}]}><Text style={styles.label}>Marital Status</Text>
             <TouchableOpacity style={dropStyle} onPress={() => setEditMaritalDrop(!editMaritalDrop)}><Text style={styles.dropdownBtnText}>{editFormData.marital_status || 'Select Marital Status'}</Text></TouchableOpacity>
             {editMaritalDrop && <View style={styles.dropdownList}>{MARITAL_STATUS.map(ms => <TouchableOpacity key={ms} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, marital_status: ms}); setEditMaritalDrop(false);}}><Text style={styles.dropdownItemText}>{ms}</Text></TouchableOpacity>)}</View>}
             </View>
@@ -1280,12 +1338,12 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           </View>
 
           <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Contact & Location</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 90 }}>
             <View style={wrapStyle}><Text style={styles.label}>Phone Number</Text><TextInput style={styles.input} value={editFormData.phone_number || ''} onChangeText={t=>setEditFormData({...editFormData, phone_number: t})} keyboardType="numeric" /></View>
             <View style={wrapStyle}><Text style={styles.label}>WhatsApp Number</Text><TextInput style={styles.input} value={editFormData.whatsapp_number || ''} onChangeText={t=>setEditFormData({...editFormData, whatsapp_number: t})} keyboardType="numeric" /></View>
             <View style={wrapStyle}><Text style={styles.label}>Email</Text><TextInput style={styles.input} value={editFormData.email || ''} onChangeText={t=>setEditFormData({...editFormData, email: t})} /></View>
 
-            <View style={wrapStyle}><Text style={styles.label}>Native Place</Text>
+            <View style={[wrapStyle, {zIndex: editNativeDrop ? 100 : 1}]}><Text style={styles.label}>Native Place</Text>
             <TouchableOpacity style={dropStyle} onPress={() => setEditNativeDrop(!editNativeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.native_place || 'Select Native Place'}</Text></TouchableOpacity>
             {editNativeDrop && <View style={styles.dropdownList}>{NATIVE_PLACES.map(np => <TouchableOpacity key={np} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, native_place: np}); setEditNativeDrop(false);}}><Text style={styles.dropdownItemText}>{np}</Text></TouchableOpacity>)}</View>}
             </View>
@@ -1295,10 +1353,10 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           </View>
 
           <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Education & Occupation</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
-            {editFormData.role === 'MEMBER' && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 80 }}>
+            {(editFormData.role === 'MEMBER' || editFormData.role === 'ADMIN') && (
               <>
-                <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                <View style={[wrapStyle, {zIndex: editEduDrop ? 100 : 1}]}><Text style={styles.label}>Education Category</Text>
                 <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Education'}</Text></TouchableOpacity>
                 {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
                 </View>
@@ -1308,28 +1366,23 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             )}
             {editFormData.role === 'STUDENT' && (
               <>
-                <View style={wrapStyle}><Text style={styles.label}>Class / Grade</Text>
+                <View style={[wrapStyle, {zIndex: editClassDrop ? 100 : 1}]}><Text style={styles.label}>Class / Grade</Text>
                 <TouchableOpacity style={dropStyle} onPress={() => setEditClassDrop(!editClassDrop)}><Text style={styles.dropdownBtnText}>{editFormData.class_grade || 'Select Class / Grade'}</Text></TouchableOpacity>
                 {editClassDrop && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map(c => <TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, class_grade: c}); setEditClassDrop(false);}}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>)}</ScrollView></View>}
                 </View>
-
                 <View style={wrapStyle}><Text style={styles.label}>School / College Name</Text><TextInput style={styles.input} value={editFormData.school_name || ''} onChangeText={t=>setEditFormData({...editFormData, school_name: t})} /></View>
-
-                <View style={wrapStyle}><Text style={styles.label}>Institution Type</Text>
+                <View style={[wrapStyle, {zIndex: editSchoolTypeDrop ? 100 : 1}]}><Text style={styles.label}>Institution Type</Text>
                 <TouchableOpacity style={dropStyle} onPress={() => setEditSchoolTypeDrop(!editSchoolTypeDrop)}><Text style={styles.dropdownBtnText}>{editFormData.school_type || 'Select Institution Type'}</Text></TouchableOpacity>
                 {editSchoolTypeDrop && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map(st => <TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, school_type: st}); setEditSchoolTypeDrop(false);}}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>)}</View>}
                 </View>
-
                 <View style={wrapStyle}><Text style={styles.label}>Institution Location</Text><TextInput style={styles.input} value={editFormData.school_location || ''} onChangeText={t=>setEditFormData({...editFormData, school_location: t})} /></View>
-
-                <View style={wrapStyle}><Text style={styles.label}>Medium of Instruction</Text>
+                <View style={[wrapStyle, {zIndex: editMediumDrop ? 100 : 1}]}><Text style={styles.label}>Medium of Instruction</Text>
                 <TouchableOpacity style={dropStyle} onPress={() => setEditMediumDrop(!editMediumDrop)}><Text style={styles.dropdownBtnText}>{editFormData.medium_of_instruction || 'Select Medium'}</Text></TouchableOpacity>
                 {editMediumDrop && <View style={styles.dropdownList}>{MEDIUMS.map(md => <TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, medium_of_instruction: md}); setEditMediumDrop(false);}}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>)}</View>}
                 </View>
-
                 {isCollegeEdit && (
                   <>
-                    <View style={wrapStyle}><Text style={styles.label}>Education Category</Text>
+                    <View style={[wrapStyle, {zIndex: editEduDrop ? 100 : 1}]}><Text style={styles.label}>Education Category</Text>
                     <TouchableOpacity style={dropStyle} onPress={() => setEditEduDrop(!editEduDrop)}><Text style={styles.dropdownBtnText}>{editFormData.educational_qualification || 'Select Category'}</Text></TouchableOpacity>
                     {editEduDrop && <View style={styles.dropdownList}>{EDU_CATEGORIES.map(el => <TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, educational_qualification: el}); setEditEduDrop(false);}}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>)}</View>}
                     </View>
@@ -1340,14 +1393,17 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             )}
           </View>
 
-          <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8, marginTop: 24}]}>Islamic Studies</Text>
-          <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
-             <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
-             <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
+          <View style={{ zIndex: 75, marginTop: 24 }}>
+            <Text style={[styles.sectionTitle, {fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8}]}>Islamic Studies</Text>
+            <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
+               <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
+               <TouchableOpacity style={[styles.filterChip, editFormData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setEditFormData({...editFormData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, editFormData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
+            </View>
           </View>
+
           {editFormData.islamic_studies === 'YES' && (
-            <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0'}}>
-              <View style={wrapStyle}><Text style={styles.label}>Qualification</Text>
+            <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 70}}>
+              <View style={[wrapStyle, {zIndex: editIslamicDrop ? 100 : 1}]}><Text style={styles.label}>Qualification</Text>
               <TouchableOpacity style={dropStyle} onPress={() => setEditIslamicDrop(!editIslamicDrop)}><Text style={styles.dropdownBtnText}>{editFormData.islamic_qualification || 'Select Qualification'}</Text></TouchableOpacity>
               {editIslamicDrop && <View style={styles.dropdownList}>{ISLAMIC_QUALS.map(iq => <TouchableOpacity key={iq} style={styles.dropdownItem} onPress={() => {setEditFormData({...editFormData, islamic_qualification: iq}); setEditIslamicDrop(false);}}><Text style={styles.dropdownItemText}>{iq}</Text></TouchableOpacity>)}</View>}
               </View>
@@ -1359,7 +1415,6 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             </View>
           )}
 
-          {/* SAVE BUTTON AT BOTTOM */}
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 32 }}>
               <TouchableOpacity style={[styles.neatBtnSuccess, { paddingHorizontal: 32, paddingVertical: 14 }]} onPress={saveEditedUser} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={[styles.neatBtnText, { fontSize: 15 }]}>💾 Save All Details</Text>}
@@ -1383,40 +1438,71 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           </TouchableOpacity>
         </View>
 
-
         <View style={{flexDirection: 'row', gap: 24, flexWrap: 'wrap'}}>
           <View style={{alignItems: 'center', marginBottom: 15}}>
              {u.profile_photo ? ( <Image source={{uri: u.profile_photo}} style={{width: 150, height: 150, borderRadius: 75, borderWidth: 4, borderColor: '#F8FAFC'}} /> ) : ( <View style={{width: 150, height: 150, borderRadius: 75, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text style={{fontSize: 50}}>👤</Text></View> )}
              <TouchableOpacity style={{marginTop: 10}} onPress={() => uploadPhotoForUser(u.official_id)}><Text style={{color: '#0056b3', fontWeight: '900'}}>Change Photo</Text></TouchableOpacity>
           </View>
 
-
           <View style={{flex: 1, minWidth: 250}}>
-             <Text style={{fontSize: 28, fontWeight: '900', color: '#004085', marginBottom: 2}}>{u.full_name} {u.is_core_admin && '👑'} {isPromotedSubAdmin && '⭐'}</Text>
-             <Text style={{fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4}}>S/O {u.father_name || 'N/A'}</Text>
+             <Text style={{fontSize: 22, fontWeight: '900', color: '#004085', marginBottom: 2, textTransform: 'uppercase'}}>{u.full_name} {u.is_core_admin && '👑'} {isPromotedSubAdmin && '⭐'}</Text>
+             <Text style={{fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4}}>S/O {u.father_name || 'N/A'} & {u.mother_name || 'N/A'}</Text>
              <Text style={{fontSize: 13, color: '#64748B', marginBottom: 16, fontWeight: '500'}}>Official ID: <Text style={{fontWeight: '800', color: '#004085'}}>{u.official_id}</Text></Text>
              
-             <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20}}>
+             <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24}}>
                <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Status: {u.membership_status}</Text></View>
-               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Age: {age}</Text></View>
-               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Blood: {u.blood_group || 'N/A'}</Text></View>
                <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Role: {u.role}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Age: {age}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Gender: {u.gender || 'N/A'}</Text></View>
+               <View style={styles.infoBadge}><Text style={styles.infoBadgeTxt}>Blood: {u.blood_group || 'N/A'}</Text></View>
              </View>
 
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Personal Information</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>DOB:</Text> {u.dob}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Aadhaar Number:</Text> {u.aadhaar_number}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Parents Status:</Text> {u.parents_status}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Marital Status:</Text> {u.marital_status || 'N/A'}</Text>
+             </View>
+
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Contact & Location</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Primary Mobile:</Text> {u.phone_number}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>WhatsApp:</Text> {u.whatsapp_number}</Text>
+                {u.role === 'STUDENT' && <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Student Mobile:</Text> {u.student_mobile}</Text>}
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Email:</Text> {u.email}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Native Place:</Text> {u.native_place}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Current City:</Text> {u.current_location}</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Full Address:</Text> {u.address}</Text>
+             </View>
+
+             <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16}}>
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Education & Occupation</Text>
+                {(u.role === 'MEMBER' || u.role === 'ADMIN') && (
+                  <>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Education Category:</Text> {u.educational_qualification}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Course/Major:</Text> {u.course_details}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Occupation/Job:</Text> {u.occupation}</Text>
+                  </>
+                )}
+                {u.role === 'STUDENT' && (
+                  <>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Class/Grade:</Text> {u.class_grade}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Institution:</Text> {u.school_name} ({u.school_type})</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Institution Location:</Text> {u.school_location}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Medium:</Text> {u.medium_of_instruction}</Text>
+                  </>
+                )}
+             </View>
 
              <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0'}}>
-                <Text style={{fontWeight: '900', marginBottom: 8, color: '#004085'}}>Contact & Background</Text>
-                <Text style={styles.detailTxt}>📞 Phone: {u.phone_number} / {u.whatsapp_number}</Text>
-                <Text style={styles.detailTxt}>📍 Native: {u.native_place}</Text>
-                <Text style={styles.detailTxt}>🏠 Address: {u.address}</Text>
-                {u.role === 'MEMBER' && <Text style={styles.detailTxt}>💼 Job: {u.occupation}</Text>}
-                {u.role === 'STUDENT' && <Text style={styles.detailTxt}>🎓 Class: {u.class_grade} ({u.school_name})</Text>}
+                <Text style={{fontWeight: '900', marginBottom: 12, color: '#004085', fontSize: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 6}}>Islamic Background</Text>
+                <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Status:</Text> {u.islamic_studies === 'YES' ? 'Completed/Pursuing' : 'No'}</Text>
                 {u.islamic_studies === 'YES' && (
-                  <View style={{marginTop: 12, padding: 12, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0'}}>
-                    <Text style={{fontWeight: '800', color: '#004085', marginBottom: 4}}>Islamic Background</Text>
-                    <Text style={styles.detailTxt}>Qual: {u.islamic_qualification}</Text>
-                    <Text style={styles.detailTxt}>Madrasa: {u.madrasa_name} ({u.madrasa_location})</Text>
-                  </View>
+                  <>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Qualification:</Text> {u.islamic_qualification}</Text>
+                    <Text style={styles.detailTxt}><Text style={{fontWeight: '700', color: '#1E293B'}}>Madrasa:</Text> {u.madrasa_name} ({u.madrasa_location})</Text>
+                  </>
                 )}
              </View>
           </View>
@@ -1479,15 +1565,15 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
           {(activeTab === 'USERS' || activeTab === 'STUDENTS') && (
             <>
-              {/* ACTION ROW: SEARCH & ADD MEMBER */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, width: '100%' }}>
+              {/* ACTION ROW: SEARCH & ADD MEMBER (MOBILE RESPONSIVE) */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, width: '100%', gap: 12 }}>
                 
-                {/* SLEEK SEARCH BAR (LEFT ALIGNED, REDUCED WIDTH) */}
-                <View style={{ width: 300, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 16, height: 44, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)' }}>
+                {/* SLEEK SEARCH BAR (FLEXIBLE WIDTH) */}
+                <View style={{ flex: 1, minWidth: 200, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 16, height: 44 }}>
                   <Text style={{ fontSize: 16, color: '#94A3B8', marginRight: 10 }}>🔍</Text>
                   <TextInput 
                     style={{ flex: 1, fontSize: 14, color: '#004085', fontWeight: '500', outline: 'none' }} 
-                    placeholder="Search by Name or ID..." 
+                    placeholder="Search Name or ID..." 
                     placeholderTextColor="#94A3B8"
                     value={searchQuery} 
                     onChangeText={setSearchQuery} 
@@ -1499,7 +1585,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                   )}
                 </View>
 
-                {/* ADD BUTTON (RIGHT ALIGNED, MATCHING HEIGHT) */}
+                {/* ADD BUTTON */}
                 <TouchableOpacity style={[styles.neatBtnSuccess, { height: 44, paddingHorizontal: 20, justifyContent: 'center', borderRadius: 10 }]} onPress={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')}>
                   <Text style={[styles.neatBtnText, { fontSize: 13 }]}>+ Add {activeTab === 'STUDENTS' ? 'Student' : 'Member'}</Text>
                 </TouchableOpacity>
@@ -1529,128 +1615,153 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
 
           {activeTab === 'FINANCE' && (
-            <>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={styles.sectionTitle}>Finance Hub</Text>
-                <TouchableOpacity style={styles.neatBtnDark} onPress={() => downloadCSV("Date,Txn ID,Member Name,Type,Amount,Method,Reason\n" + filteredTxns.map(t => `"${new Date(t.transaction_date).toLocaleDateString()}","${t.transaction_id}","${t.full_name}","${t.donation_type}","${t.amount}","${t.payment_method}","${t.reason}"`).join("\n"), "HIYWA_Finance.csv")}><Text style={styles.neatBtnTextDark}>📥 Export Ledger</Text></TouchableOpacity>
-              </View>
-
-
-              <View style={styles.statGrid}>
-                <View style={styles.statBoxLarge}><Text style={styles.statLargeVal}>₹{totalFinSubs}</Text><Text style={styles.statLargeKey}>Total Subs.</Text></View>
-                <View style={[styles.statBoxLarge, {backgroundColor: '#0056b3'}]}><Text style={styles.statLargeVal}>₹{totalFinGen}</Text><Text style={styles.statLargeKey}>Total General</Text></View>
-                <View style={[styles.statBoxLarge, {backgroundColor: '#8B5CF6'}]}><Text style={styles.statLargeVal}>₹{totalFinCamp}</Text><Text style={styles.statLargeKey}>Total Campaign</Text></View>
-              </View>
-
-
-              {/* NEW Single-Line Filter Row for Finance */}
-              <View style={[styles.formCard, { padding: 16, marginBottom: 16, marginTop: 24, zIndex: 100 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', zIndex: 100 }}>
-                  <TextInput style={[styles.input, { flex: 2, minWidth: 140, marginBottom: 0, height: 42, paddingVertical: 8 }]} placeholder="Search Name, ID or Reason..." value={finSearchQuery} onChangeText={setFinSearchQuery} />
-                  <FilterDropdown label="Type" value={finTypeFilter} options={['SUBSCRIPTION', 'GENERAL', 'FUND_RAISING']} onSelect={(v)=>setFinTypeFilter(v)} />
-                  
-                  {/* Compact Dates */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    {Platform.OS === 'web' ? <input type="date" style={{...webDateStyle, marginBottom: 0, height: 42, padding: 8, width: 130, fontSize: 12}} value={finStartDate} onChange={e => setFinStartDate(e.target.value)} /> : <TextInput style={[styles.input, {marginBottom: 0, height: 42, width: 100, fontSize: 12}]} placeholder="Start Date" value={finStartDate} onChangeText={setFinStartDate} />}
-                    <Text style={{color: '#64748B'}}>-</Text>
-                    {Platform.OS === 'web' ? <input type="date" style={{...webDateStyle, marginBottom: 0, height: 42, padding: 8, width: 130, fontSize: 12}} value={finEndDate} onChange={e => setFinEndDate(e.target.value)} /> : <TextInput style={[styles.input, {marginBottom: 0, height: 42, width: 100, fontSize: 12}]} placeholder="End Date" value={finEndDate} onChangeText={setFinEndDate} />}
-                  </View>
-
-
-                  <TouchableOpacity style={[styles.neatBtnDark, { height: 42, paddingHorizontal: 12 }]} onPress={() => {setFinStartDate(''); setFinEndDate(''); setFinTypeFilter(''); setFinSearchQuery('');}}>
-                      <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13 }}>Reset</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-
-              <View style={[styles.tabContainer, {marginTop: 0}]}>
-                <TouchableOpacity style={[styles.tabBtn, financeTab === 'LEDGER' && styles.tabBtnActive]} onPress={() => setFinanceTab('LEDGER')}><Text style={[styles.tabBtnText, financeTab === 'LEDGER' && styles.tabBtnTextActive]}>Income Transactions</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.tabBtn, financeTab === 'DUES' && styles.tabBtnActive]} onPress={() => setFinanceTab('DUES')}><Text style={[styles.tabBtnText, financeTab === 'DUES' && styles.tabBtnTextActive]}>Pending Dues</Text></TouchableOpacity>
-              </View>
-
-
-              {financeTab === 'LEDGER' && (
-                <View style={styles.formCard}>
-                  {loading ? <ActivityIndicator /> : filteredTxns.map((txn, index) => (
-                    <View key={txn.transaction_id || index} style={styles.historyRow}>
-                      <View style={{ flex: 1, marginRight: 10 }}>
-                        <Text style={{ fontWeight: '800', color: '#004085', fontSize: 16 }}>{txn.full_name}</Text>
-                        <Text style={styles.historyDetails}>{txn.donation_type === 'FUND_RAISING' ? 'CAMPAIGN' : txn.donation_type}: {txn.reason}</Text>
-                        <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleDateString()} | {txn.payment_method}</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981', marginBottom: 8 }}>+ ₹{txn.amount}</Text>
-                        <TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-
-              {financeTab === 'DUES' && (
-                <View style={styles.formCard}>
-                  {pendingDuesList.map((u) => (
-                    <View key={u.official_id} style={styles.historyRow}>
-                      <View><Text style={{ fontWeight: '800', color: '#EF4444', fontSize: 16 }}>{u.full_name} ({u.official_id})</Text><Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '600' }}>📞 {u.phone_number}</Text></View>
-                      <View style={{alignItems: 'flex-end'}}><Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444' }}>Owes ₹{u.duesAmount}</Text><Text style={{ fontSize: 13, color: '#64748B', fontWeight: '700', marginTop: 4 }}>{u.duesMonths} Months</Text></View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </>
-          )}
-
-
-          {activeTab === 'EXPENSE' && (
             <View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <Text style={styles.sectionTitle}>Trust Expenses</Text>
-                <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => setExpenseModalVisible(true)}><Text style={styles.neatBtnText}>+ Log Expense</Text></TouchableOpacity>
+              {/* TOP HEADER & BUTTONS */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+                <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Finance Ledger</Text>
+                <View style={{flexDirection: 'row', gap: 12, flexWrap: 'wrap'}}>
+                   <TouchableOpacity style={styles.neatBtnDark} onPress={() => setShowDuesModal(true)}>
+                      <Text style={styles.neatBtnTextDark}>⏳ Pending Dues</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => setExpenseModalVisible(true)}>
+                      <Text style={styles.neatBtnText}>+ Log Expense</Text>
+                   </TouchableOpacity>
+                </View>
               </View>
 
-
+              {/* TOP STATS */}
               <View style={styles.statGrid}>
+                <View style={[styles.statBoxLarge, {backgroundColor: '#10B981'}]}><Text style={styles.statLargeVal}>₹{(totalIncomeVal + Number(initialAmount)).toLocaleString()}</Text><Text style={styles.statLargeKey}>Total Income</Text></View>
+                <View style={[styles.statBoxLarge, {backgroundColor: '#EF4444'}]}><Text style={styles.statLargeVal}>₹{totalExpenseVal.toLocaleString()}</Text><Text style={styles.statLargeKey}>Total Expense</Text></View>
                 <View style={styles.statBoxLarge}><Text style={styles.statLargeVal}>₹{currentBalance.toLocaleString()}</Text><Text style={styles.statLargeKey}>Current Balance</Text></View>
-                <View style={[styles.statBoxLarge, {backgroundColor: '#10B981'}]}><Text style={styles.statLargeVal}>₹{(totalIncomeVal + Number(initialAmount)).toLocaleString()}</Text><Text style={styles.statLargeKey}>Total Trust Funds</Text></View>
-                <View style={[styles.statBoxLarge, {backgroundColor: '#EF4444'}]}><Text style={styles.statLargeVal}>₹{totalExpenseVal.toLocaleString()}</Text><Text style={styles.statLargeKey}>Total Expensed</Text></View>
               </View>
 
-
-              <View style={[styles.formCard, {marginTop: 24}]}>
-                <Text style={styles.sectionTitle}>Expense Ledger</Text>
-                {loading ? <ActivityIndicator /> : allExpenses.sort((a,b)=> new Date(b.transaction_date)-new Date(a.transaction_date)).map((txn, index) => (
-                  <View key={txn.transaction_id || index} style={styles.historyRow}>
-                    <View style={{ flex: 1, marginRight: 10 }}>
-                      <Text style={{ fontWeight: '800', color: '#004085', fontSize: 16 }}>{txn.reason}</Text>
-                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleDateString()} | Logged by: {txn.full_name}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444', marginBottom: 8 }}>- ₹{txn.amount}</Text>
-                    </View>
-                  </View>
-                ))}
+              {/* SEARCH BAR */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 16, height: 44, marginTop: 24, marginBottom: 24 }}>
+                 <Text style={{ fontSize: 16, color: '#94A3B8', marginRight: 10 }}>🔍</Text>
+                 <TextInput style={{ flex: 1, fontSize: 14, color: '#004085', fontWeight: '500', outline: 'none' }} placeholder="Search Transactions or Names..." placeholderTextColor="#94A3B8" value={finSearchQuery} onChangeText={setFinSearchQuery} />
+                 {finSearchQuery.length > 0 && <TouchableOpacity onPress={() => setFinSearchQuery('')} style={{ padding: 4 }}><Text style={{ fontSize: 16, color: '#94A3B8', fontWeight: '800' }}>✕</Text></TouchableOpacity>}
               </View>
+
+              {/* TOGGLE TABS */}
+              <View style={[styles.tabContainer, {marginTop: 0, marginBottom: 16}]}>
+                <TouchableOpacity style={[styles.tabBtn, ledgerTab === 'INCOME' && styles.tabBtnActive]} onPress={() => setLedgerTab('INCOME')}>
+                   <Text style={[styles.tabBtnText, ledgerTab === 'INCOME' && styles.tabBtnTextActive]}>Income Transactions</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tabBtn, ledgerTab === 'EXPENSE' && styles.tabBtnActive]} onPress={() => setLedgerTab('EXPENSE')}>
+                   <Text style={[styles.tabBtnText, ledgerTab === 'EXPENSE' && styles.tabBtnTextActive]}>Expense Transactions</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* INCOME TRANSACTIONS LIST */}
+              {ledgerTab === 'INCOME' && (
+                <View style={[styles.formCard, {marginBottom: 32}]}>
+                   {loading ? <ActivityIndicator /> : filteredIncomes.length === 0 ? <Text style={{color: '#64748B'}}>No incomes found.</Text> : filteredIncomes.map((txn, index) => (
+                     <View key={txn.transaction_id || index} style={styles.historyRow}>
+                       <View style={{ flex: 1, marginRight: 10 }}>
+                         <Text style={{ fontWeight: '800', color: '#004085', fontSize: 16 }}>{txn.full_name}</Text>
+                         <Text style={styles.historyDetails}>{txn.donation_type === 'FUND_RAISING' ? 'CAMPAIGN' : txn.donation_type}: {txn.reason}</Text>
+                         <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} | {txn.payment_method}</Text>
+                       </View>
+                       <View style={{ alignItems: 'flex-end' }}>
+                         <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981', marginBottom: 8 }}>+ ₹{txn.amount}</Text>
+                         <TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity>
+                       </View>
+                     </View>
+                   ))}
+                </View>
+              )}
+
+              {/* EXPENSE TRANSACTIONS LIST */}
+              {ledgerTab === 'EXPENSE' && (
+                <View style={[styles.formCard, {marginBottom: 32}]}>
+                   {loading ? <ActivityIndicator /> : filteredExpensesList.length === 0 ? <Text style={{color: '#64748B'}}>No expenses found.</Text> : filteredExpensesList.map((txn, index) => (
+                     <View key={txn.transaction_id || index} style={styles.historyRow}>
+                       <View style={{ flex: 1, marginRight: 10 }}>
+                         <Text style={{ fontWeight: '800', color: '#004085', fontSize: 16 }}>{txn.reason}</Text>
+                         <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} | Logged by: {txn.full_name}</Text>
+                       </View>
+                       <View style={{ alignItems: 'flex-end' }}>
+                         <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444', marginBottom: 8 }}>- ₹{txn.amount}</Text>
+                       </View>
+                     </View>
+                   ))}
+                </View>
+              )}
             </View>
           )}
 
+          {activeTab === 'REPORTS' && (
+            <View>
+              <Text style={styles.sectionTitle}>Reports & Exports</Text>
+              
+              {/* TOGGLE TABS */}
+              <View style={[styles.tabContainer, {marginTop: 0, marginBottom: 24}]}>
+                <TouchableOpacity style={[styles.tabBtn, repType === 'DIRECTORY' && styles.tabBtnActive]} onPress={() => setRepType('DIRECTORY')}>
+                  <Text style={[styles.tabBtnText, repType === 'DIRECTORY' && styles.tabBtnTextActive]}>Directory Report</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tabBtn, repType === 'FINANCE' && styles.tabBtnActive]} onPress={() => setRepType('FINANCE')}>
+                  <Text style={[styles.tabBtnText, repType === 'FINANCE' && styles.tabBtnTextActive]}>Finance Report</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* DIRECTORY FILTERS */}
+              {repType === 'DIRECTORY' && (
+                <View style={styles.formCard}>
+                  <Text style={[styles.sectionTitle, {fontSize: 15}]}>Directory Filters</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24, zIndex: 100 }}>
+                    <FilterDropdown label="Role" value={repRole} options={['MEMBER', 'STUDENT', 'ADMIN']} onSelect={setRepRole} />
+                    <FilterDropdown label="Status" value={repStatus} options={['ACTIVE', 'INACTIVE', 'DECEASED']} onSelect={setRepStatus} />
+                    <FilterDropdown label="Blood Group" value={repBlood} options={BLOOD_GROUPS} onSelect={setRepBlood} />
+                    <FilterDropdown label="Gender" value={repGender} options={GENDERS} onSelect={setRepGender} />
+                  </View>
+                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
+                     <Text style={{fontWeight: '800', color: '#64748B'}}>Matches: {filteredRepDir.length} Records</Text>
+                     <TouchableOpacity style={styles.neatBtnSuccess} onPress={exportDirectory}><Text style={styles.neatBtnText}>📥 Export CSV</Text></TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* FINANCE FILTERS */}
+              {repType === 'FINANCE' && (
+                <View style={styles.formCard}>
+                   <Text style={[styles.sectionTitle, {fontSize: 15}]}>Finance Filters</Text>
+                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24, alignItems: 'center', zIndex: 100 }}>
+                     <FilterDropdown label="Type" value={repFinType} options={['SUBSCRIPTION', 'GENERAL', 'EXPENSE', 'FUND_RAISING']} onSelect={setRepFinType} />
+                     <View style={{ flex: 1, minWidth: 130 }}>
+                       <Text style={{ fontSize: 10, fontWeight: '800', color: '#004085', marginBottom: 4, textTransform: 'uppercase' }}>Start Date</Text>
+                       {Platform.OS === 'web' ? <input type="date" style={{...webDateStyle, marginBottom: 0, height: 42, padding: 8, fontSize: 12}} value={repStartDate} onChange={e => setRepStartDate(e.target.value)} /> : <TextInput style={[styles.input, {marginBottom: 0, height: 42, fontSize: 12}]} placeholder="YYYY-MM-DD" value={repStartDate} onChangeText={setRepStartDate} />}
+                     </View>
+                     <View style={{ flex: 1, minWidth: 130 }}>
+                       <Text style={{ fontSize: 10, fontWeight: '800', color: '#004085', marginBottom: 4, textTransform: 'uppercase' }}>End Date</Text>
+                       {Platform.OS === 'web' ? <input type="date" style={{...webDateStyle, marginBottom: 0, height: 42, padding: 8, fontSize: 12}} value={repEndDate} onChange={e => setRepEndDate(e.target.value)} /> : <TextInput style={[styles.input, {marginBottom: 0, height: 42, fontSize: 12}]} placeholder="YYYY-MM-DD" value={repEndDate} onChangeText={setRepEndDate} />}
+                     </View>
+                   </View>
+                   <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
+                     <Text style={{fontWeight: '800', color: '#64748B'}}>Matches: {filteredRepFin.length} Transactions</Text>
+                     <TouchableOpacity style={styles.neatBtnSuccess} onPress={exportFinance}><Text style={styles.neatBtnText}>📥 Export CSV</Text></TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
 
           {activeTab === 'SETTINGS' && (
             <View style={styles.formCard}>
               <Text style={styles.sectionTitle}>System Settings Configurations</Text>
               
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 32 }}>
-                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('SUB_AMOUNT')}><Text style={styles.neatBtnTextDark}>⚙️ Subscription Amt</Text></TouchableOpacity>
-                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('PRI_UPI')}><Text style={styles.neatBtnTextDark}>⚙️ Primary UPI</Text></TouchableOpacity>
-                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('SEC_UPI')}><Text style={styles.neatBtnTextDark}>⚙️ Secondary UPI</Text></TouchableOpacity>
-                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('INIT_BAL')}><Text style={styles.neatBtnTextDark}>⚙️ Initial Balance</Text></TouchableOpacity>
+                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('SUB_AMOUNT')}><Text style={styles.neatBtnTextDark}>⚙️ Set Subscription Amount</Text></TouchableOpacity>
+                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('PRI_UPI')}><Text style={styles.neatBtnTextDark}>⚙️ Set Primary UPI</Text></TouchableOpacity>
+                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('SEC_UPI')}><Text style={styles.neatBtnTextDark}>⚙️ Set Secondary UPI</Text></TouchableOpacity>
+                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('INIT_BAL')}><Text style={styles.neatBtnTextDark}>⚙️ Set Initial Balance</Text></TouchableOpacity>
+                 <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal('PUBLIC_REG')}><Text style={styles.neatBtnTextDark}>⚙️ Set Public Registration Link: {allowPublicReg ? 'ON' : 'OFF'}</Text></TouchableOpacity>
               </View>
 
               <Text style={[styles.sectionTitle, {color: '#EF4444', fontSize: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}]}>Danger Zone</Text>
               <Text style={{color: '#64748B', fontSize: 13, marginBottom: 16}}>Wipe all operational data, transactions, campaigns, and non-admin users from the database.</Text>
               
-              <TouchableOpacity style={[styles.button, {backgroundColor: '#EF4444', maxWidth: 280, marginTop: 0}]} onPress={handleMasterDatabaseReset} disabled={isSubmitting}>
+              <TouchableOpacity style={[styles.button, {backgroundColor: '#EF4444', maxWidth: 280, marginTop: 0}]} onPress={() => setMasterResetModal(true)} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>⚠️ Reset Entire Database</Text>}
               </TouchableOpacity>
             </View>
@@ -1664,7 +1775,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                   <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}><TouchableOpacity style={styles.neatBtnDark} onPress={() => setViewCampDonors(null)}><Text style={styles.neatBtnTextDark}>← Back</Text></TouchableOpacity><Text style={[styles.sectionTitle, {flex: 1, textAlign: 'right', marginBottom: 0}]} numberOfLines={1}>{viewCampDonors.title} Donors</Text></View>
                   {globalTxns.filter(t => t.campaign_id === viewCampDonors.campaign_id).map((txn, idx) => (
                      <View key={idx} style={styles.historyRow}>
-                       <View style={{ flex: 1, paddingRight: 10 }}><Text style={{ fontWeight: '800', color: '#004085', fontSize: 16 }}>{txn.full_name}</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleDateString()} | {txn.payment_method}</Text></View>
+                       <View style={{ flex: 1, paddingRight: 10 }}><Text style={{ fontWeight: '800', color: '#004085', fontSize: 16 }}>{txn.full_name}</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} | {txn.payment_method}</Text></View>
                        <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981', marginBottom: 8 }}>+ ₹{txn.amount}</Text><TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity></View>
                      </View>
                   ))}
@@ -1687,8 +1798,8 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                           <Text style={{ color: '#64748B', marginBottom: 16, fontWeight: '500', lineHeight: 20 }} numberOfLines={2}>{camp.description}</Text>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><Text style={{ fontWeight: '800', color: '#004085' }}>Raised: {'\u20B9'}{raised}</Text><Text style={{ color: '#94A3B8', fontWeight: '700' }}>Goal: {'\u20B9'}{target}</Text></View>
                           <View style={{ height: 12, backgroundColor: '#F1F5F9', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}><View style={{ width: `${progress}%`, backgroundColor: '#10B981', height: '100%' }} /></View>
-                          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-                             <View style={{flexDirection: 'row', gap: 10}}>
+                          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12}}>
+                             <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 10}}>
                                <TouchableOpacity style={styles.neatBtnDark} onPress={() => setViewCampDonors(camp)}><Text style={styles.neatBtnTextDark}>👥 View Donors</Text></TouchableOpacity>
                                <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => { setCampTitle(camp.title); setCampDesc(camp.description); setCampTarget(camp.target_amount); setCashCampId(camp.campaign_id); setCashAmount(camp.raised_amount); setCampStatus(camp.status); setCashReason(camp.remarks || ''); setShowCampaignModal(true); }}><Text style={styles.neatBtnText}>✏️ Edit/Stop</Text></TouchableOpacity>
                              </View>
@@ -1760,64 +1871,62 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#004085', marginBottom: 16 }}>
               {configModal === 'SUB_AMOUNT' ? 'Set Subscription Amount (₹)' : 
                configModal === 'PRI_UPI' ? 'Primary Trust UPI ID' : 
-               configModal === 'SEC_UPI' ? 'Secondary Trust UPI ID' : 'Initial Trust Balance (₹)'}
+               configModal === 'SEC_UPI' ? 'Secondary Trust UPI ID' : 
+               configModal === 'PUBLIC_REG' ? `Turn ${allowPublicReg ? 'OFF' : 'ON'} Public Registration Link?` :
+               'Initial Trust Balance (₹)'}
             </Text>
+
+            {/* ONLY SHOW TEXT INPUT FOR NON-TOGGLE SETTINGS */}
+            {configModal !== 'PUBLIC_REG' && (
+              <TextInput 
+                style={styles.input} 
+                autoCapitalize="none"
+                keyboardType={(configModal === 'SUB_AMOUNT' || configModal === 'INIT_BAL') ? 'numeric' : 'default'}
+                value={configModal === 'SUB_AMOUNT' ? subAmount : configModal === 'PRI_UPI' ? primaryUpi : configModal === 'SEC_UPI' ? secondaryUpi : initialAmount} 
+                onChangeText={(t) => {
+                  if (configModal === 'SUB_AMOUNT') setSubAmount(t);
+                  else if (configModal === 'PRI_UPI') setPrimaryUpi(t);
+                  else if (configModal === 'SEC_UPI') setSecondaryUpi(t);
+                  else setInitialAmount(t);
+                }} 
+              />
+            )}
+
+            <Text style={[styles.label, {marginTop: 4}]}>Admin Password Required *</Text>
             <TextInput 
-              style={styles.input} 
-              autoCapitalize="none"
-              keyboardType={(configModal === 'SUB_AMOUNT' || configModal === 'INIT_BAL') ? 'numeric' : 'default'}
-              value={configModal === 'SUB_AMOUNT' ? subAmount : configModal === 'PRI_UPI' ? primaryUpi : configModal === 'SEC_UPI' ? secondaryUpi : initialAmount} 
-              onChangeText={(t) => {
-                if (configModal === 'SUB_AMOUNT') setSubAmount(t);
-                else if (configModal === 'PRI_UPI') setPrimaryUpi(t);
-                else if (configModal === 'SEC_UPI') setSecondaryUpi(t);
-                else setInitialAmount(t);
-              }} 
+              style={[styles.input, {marginBottom: 0}]} 
+              secureTextEntry={true} 
+              placeholder="Enter your password to save" 
+              value={configModalPassword || ''} 
+              onChangeText={setConfigModalPassword} 
             />
 
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 12 }}>
-               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setConfigModal(null)}>
+               <TouchableOpacity style={styles.neatBtnDark} onPress={() => { setConfigModal(null); setConfigModalPassword(''); }}>
                  <Text style={styles.neatBtnTextDark}>Cancel</Text>
                </TouchableOpacity>
-               <TouchableOpacity style={styles.neatBtnSuccess} onPress={() => {
-                  // Trigger custom password check inside our custom modal alert system
-                  Alert.alert(
-                    "Admin Password Required", 
-                    "Enter your password to save system changes:", 
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      { 
-                        text: "Verify & Save", 
-                        style: "default", 
-                        onPress: async () => {
-                           // For web/mobile prompt fallback
-                           const pass = Platform.OS === 'web' ? prompt("Enter admin password:") : null; 
-                           // Note: If using web prompt or if you want a text field, let's execute directly:
-                           if (Platform.OS === 'web' && !pass) return;
-                           
-                           try {
-                              const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
-                              const inputPassword = Platform.OS === 'web' ? pass : ''; // if mobile or generic
-                              
-                              if (!adminSnap.exists()) {
-                                 return alert('Admin record not found.');
-                              }
+               
+               <TouchableOpacity style={styles.neatBtnSuccess} onPress={async () => {
+                  if (!configModalPassword) return alert('Admin password is required to save settings.');
+                  try {
+                     const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
+                     if (!adminSnap.exists() || adminSnap.data().password !== configModalPassword) {
+                        return alert('Incorrect admin password!');
+                     }
 
-                              let updatePayload = {};
-                              if (configModal === 'SUB_AMOUNT') updatePayload.monthly_subscription_amount = subAmount;
-                              else if (configModal === 'PRI_UPI') updatePayload.primary_upi = primaryUpi;
-                              else if (configModal === 'SEC_UPI') updatePayload.secondary_upi = secondaryUpi;
-                              else updatePayload.initial_amount = initialAmount;
+                     let updatePayload = {};
+                     if (configModal === 'SUB_AMOUNT') updatePayload.monthly_subscription_amount = subAmount;
+                     else if (configModal === 'PRI_UPI') updatePayload.primary_upi = primaryUpi;
+                     else if (configModal === 'SEC_UPI') updatePayload.secondary_upi = secondaryUpi;
+                     else if (configModal === 'PUBLIC_REG') updatePayload.allow_public_registration = !allowPublicReg;
+                     else updatePayload.initial_amount = initialAmount;
 
-                              await setDoc(doc(db, 'settings', 'global'), updatePayload, { merge: true }); 
-                              alert('Settings updated successfully!'); 
-                              setConfigModal(null); 
-                              fetchData(); 
-                           } catch(e) { alert('Error updating settings: ' + e.message); }
-                        } 
-                      }
-                    ]
-                  );
+                     await setDoc(doc(db, 'settings', 'global'), updatePayload, { merge: true }); 
+                     alert('Settings updated successfully!'); 
+                     setConfigModal(null); 
+                     setConfigModalPassword('');
+                     fetchData(); 
+                  } catch(e) { alert('Error updating settings: ' + e.message); }
                }}>
                  <Text style={styles.neatBtnText}>Save Setting</Text>
                </TouchableOpacity>
@@ -1832,7 +1941,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           <View style={styles.modalCard}>
             <Text style={{ fontSize: 24, fontWeight: '800', color: '#EF4444', marginBottom: 24, letterSpacing: -0.5 }}>Log Trust Expense</Text>
             <Text style={styles.label}>Detailed Reason / Vendor</Text>
-            <TextInput style={styles.input} autoCapitalize="characters" placeholder="E.g., MEETING SNACKS" value={expenseReason} onChangeText={setExpenseReason} />
+            <TextInput style={styles.input} autoCapitalize="characters" placeholder="E.g., Charity Donation" value={expenseReason} onChangeText={setExpenseReason} />
             <Text style={styles.label}>Expense Amount (₹)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={expenseAmount} onChangeText={setExpenseAmount} />
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16, gap: 12 }}>
@@ -1901,8 +2010,8 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
       {showCampaignModal && (
         <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20, width: '100%'}}>
-            <View style={[styles.modalCard, {maxWidth: 750, width: '100%'}]}>
+          <View style={[styles.modalCard, {maxWidth: 600, width: '90%', maxHeight: '90%', padding: 0, overflow: 'hidden'}]}>
+            <ScrollView contentContainerStyle={{padding: 32}}>
               <Text style={{ fontSize: 24, fontWeight: '800', color: '#004085', marginBottom: 24, letterSpacing: -0.5 }}>{cashCampId ? 'Edit' : 'Launch'} Fundraiser</Text>
               
               {cashCampId ? (
@@ -1915,7 +2024,6 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                   </View>
                 </>
               ) : null}
-
 
               <Text style={styles.label}>Campaign Title</Text><TextInput style={styles.input} value={campTitle} onChangeText={setCampTitle} />
               <Text style={styles.label}>Description</Text><TextInput style={[styles.input, {height: 80}]} multiline value={campDesc} onChangeText={setCampDesc} />
@@ -1933,17 +2041,74 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                 <TouchableOpacity style={styles.neatBtnSuccess} onPress={async () => {
                    if (!campTitle || !campDesc || !campTarget) return alert('Fill all fields.');
                    const campId = cashCampId || 'CAMP_' + Date.now();
-                   
                    const payload = { campaign_id: campId, title: campTitle.toUpperCase(), description: campDesc, target_amount: campTarget, remarks: cashReason, raised_amount: cashAmount || 0, status: campStatus || 'ACTIVE' };
-                   if (!cashCampId) payload.created_at = new Date().toISOString(); // Only add created_at if it's a new campaign
-                   
+                   if (!cashCampId) payload.created_at = new Date().toISOString(); 
                    try { await setDoc(doc(db, 'campaigns', campId), payload, {merge: true}); alert('Saved!'); setShowCampaignModal(false); fetchData(); } catch (e) { alert('Failed to save campaign: ' + e.message); }
                 }}>
                   <Text style={styles.neatBtnText}>{cashCampId ? 'Update Drive' : 'Publish Drive'}</Text>
                 </TouchableOpacity>
               </View>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {masterResetModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={{ fontSize: 24, fontWeight: '900', color: '#EF4444', marginBottom: 12, letterSpacing: -0.5 }}>⚠️ FULL RESET</Text>
+            <Text style={{ fontSize: 14, color: '#475569', marginBottom: 20, lineHeight: 22 }}>
+              This will permanently delete ALL member records, student profiles, financial transactions, and fund drives. Only your core admin account will remain.
+            </Text>
+            <Text style={styles.label}>Admin Password Required *</Text>
+            <TextInput 
+              style={styles.input} 
+              secureTextEntry={true} 
+              placeholder="Enter password to confirm" 
+              value={masterResetPassword} 
+              onChangeText={setMasterResetPassword} 
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 12 }}>
+              <TouchableOpacity style={styles.neatBtnDark} onPress={() => { setMasterResetModal(false); setMasterResetPassword(''); }}>
+                <Text style={styles.neatBtnTextDark}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.neatBtnSuccess, {backgroundColor: '#EF4444'}]} onPress={async () => {
+                 if (!masterResetPassword) return alert('Password required.');
+                 try {
+                   const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
+                   if (!adminSnap.exists() || adminSnap.data().password !== masterResetPassword) {
+                      return alert('Incorrect admin password! Reset aborted.');
+                   }
+                   
+                   setMasterResetModal(false);
+                   setMasterResetPassword('');
+                   executeWipe(); // Start the wipe process
+                 } catch(e) { alert('Verification failed: ' + e.message); }
+              }}>
+                <Text style={styles.neatBtnText}>WIPE DATABASE</Text>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {showDuesModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, {maxWidth: 600, width: '90%', maxHeight: '90%', padding: 0, overflow: 'hidden'}]}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#F8FAFC'}}>
+               <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Pending Subscription Dues</Text>
+               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setShowDuesModal(false)}><Text style={styles.neatBtnTextDark}>✕ Close</Text></TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{padding: 24}}>
+               {pendingDuesList.length === 0 && <Text style={{color: '#64748B'}}>No pending dues found.</Text>}
+               {pendingDuesList.map((u) => (
+                 <View key={u.official_id} style={styles.historyRow}>
+                   <View><Text style={{ fontWeight: '800', color: '#EF4444', fontSize: 16 }}>{u.full_name} ({u.official_id})</Text><Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '600' }}>📞 {u.phone_number}</Text></View>
+                   <View style={{alignItems: 'flex-end'}}><Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444' }}>Owes ₹{u.duesAmount}</Text><Text style={{ fontSize: 13, color: '#64748B', fontWeight: '700', marginTop: 4 }}>{u.duesMonths} Months</Text></View>
+                 </View>
+               ))}
+            </ScrollView>
+          </View>
         </View>
       )}
     </ScrollView>
@@ -1993,8 +2158,8 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
 
   const pickImage = () => {
     Alert.alert("Upload Photo", "Choose an option", [
-      { text: "Take Photo (Camera)", onPress: async () => { const permissionResult = await ImagePicker.requestCameraPermissionsAsync(); if (permissionResult.granted === false) return alert("Camera permission is required!"); let result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setFormData({...formData, profile_photo: b64}); } } },
-      { text: "Choose from Gallery", onPress: async () => { if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); } let result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`; setFormData({...formData, profile_photo: b64}); } } },
+      { text: "Take Photo (Camera)", onPress: async () => { const permissionResult = await ImagePicker.requestCameraPermissionsAsync(); if (permissionResult.granted === false) return alert("Camera permission is required!"); let result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { if(result.assets[0].base64.length > 950000) return alert("Photo too large! Please use a smaller image."); setFormData({...formData, profile_photo: `data:image/jpeg;base64,${result.assets[0].base64}`}); } } },
+      { text: "Choose from Gallery", onPress: async () => { if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); } let result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true }); if (!result.canceled && result.assets[0].base64) { if(result.assets[0].base64.length > 950000) return alert("Photo too large! Please use a smaller image."); setFormData({...formData, profile_photo: `data:image/jpeg;base64,${result.assets[0].base64}`}); } } },
       { text: "Cancel", style: "cancel" }
     ]);
   };
@@ -2007,23 +2172,34 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
     if (role === 'STUDENT' && !formData.phone_number) return alert('Parent mobile number is required.');
     setIsSubmitting(true);
 
-
-    const finalData = { ...formData };
-    for (let key in finalData) { if (typeof finalData[key] === 'string' && key !== 'profile_photo' && key !== 'password' && key !== 'email') finalData[key] = finalData[key].toUpperCase(); }
-    if (finalData.native_place === 'OTHERS') finalData.native_place = customNative.toUpperCase();
-    if (finalData.islamic_qualification === 'OTHERS') finalData.islamic_qualification = customIslamic.toUpperCase();
-
-
     try {
+      const finalData = { ...formData };
+      
+      // Safety Check: Reject photos that are too close to the 1MB Firestore limit
+      if (finalData.profile_photo && finalData.profile_photo.length > 950000) {
+         throw new Error("Profile photo file size is too large. Please select a smaller, compressed image or skip the photo for now.");
+      }
+
+      for (let key in finalData) { if (typeof finalData[key] === 'string' && key !== 'profile_photo' && key !== 'password' && key !== 'email') finalData[key] = finalData[key].toUpperCase(); }
+      
+      // Safely handle empty custom fields to prevent infinite freezing
+      if (finalData.native_place === 'OTHERS') finalData.native_place = customNative?.toUpperCase() || '';
+      if (finalData.islamic_qualification === 'OTHERS') finalData.islamic_qualification = customIslamic?.toUpperCase() || '';
+
       const membersSnap = await getDocs(collection(db, 'members'));
       const newIdNumber = membersSnap.size + 1;
       const officialId = `HIYWA${String(newIdNumber).padStart(4, '0')}`;
       finalData.official_id = officialId; finalData.membership_status = 'ACTIVE'; finalData.join_date = new Date().toISOString(); finalData.total_months_paid = 0; 
       if (newIdNumber === 1) { finalData.role = 'ADMIN'; finalData.is_core_admin = true; finalData.admin_permissions = JSON.stringify(['ALL']); } else { finalData.role = role; finalData.is_core_admin = false; }
       if (isAdminAuth) finalData.password = 'Hiywa@123';
+      
       await setDoc(doc(db, 'members', officialId), finalData);
       setRegisteredUser(finalData);
-    } catch (error) { alert('Registration Failed: ' + error.message); } finally { setIsSubmitting(false); }
+    } catch (error) { 
+      alert('Registration Failed: ' + error.message); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
 
@@ -2077,6 +2253,20 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
   if (!role) {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        
+        {/* PUBLIC REGISTRATION BRANDING HEADER */}
+        {!isAdminAuth && (
+          <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} />
+              <View style={{ flexShrink: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIDHAYATHUL ISLAM YOUTH WELFARE ASSOCIATION</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={styles.contentHeader}>
           <View style={{ flex: 1 }}><Text style={styles.contentTitle}>Select Registration Type</Text></View>
           <TouchableOpacity onPress={onBack} style={styles.neatBtnPrimary}>
@@ -2121,6 +2311,19 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
         </View>
       )}
 
+      {/* PUBLIC REGISTRATION BRANDING HEADER */}
+      {!isAdminAuth && (
+        <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} />
+            <View style={{ flexShrink: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIDHAYATHUL ISLAM YOUTH WELFARE ASSOCIATION</Text>
+              <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* STANDARDIZED LEFT-ALIGNED BACK ACTION BAR */}
       <View style={{flexDirection: 'row', alignItems: 'center', padding: 24, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}>
         <TouchableOpacity style={styles.neatBtnDark} onPress={() => { if (isAdminAuth) { onBack(); } else { setRole(null); setStep(1); } }}>
@@ -2128,7 +2331,6 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
         </TouchableOpacity>
         <Text style={[styles.sectionTitle, {marginBottom: 0}]}>{role === 'STUDENT' ? 'Student Registration' : 'Member Registration'}</Text>
       </View>
-
 
       <ScrollView contentContainerStyle={{ padding: 24 }}>
         <View style={styles.wizardProgress}>
@@ -2139,127 +2341,127 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
         
         <View style={styles.formCard}>
           {step === 1 && (
-            <>
+            <View style={{ zIndex: 100 }}>
               <TouchableOpacity onPress={pickImage} style={{alignItems: 'center', marginBottom: 24}}>
                 {formData.profile_photo ? <Image source={{uri: formData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Upload Photo</Text></View>}
                 <Text style={{color: '#004085', fontWeight: '800', marginTop: 8}}>Upload Photo</Text>
               </TouchableOpacity>
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
-                <View style={wrapStyle}><Text style={styles.label}>Full Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.full_name} onChangeText={(t) => setFormData({...formData, full_name: t})} /></View>
-                <View style={wrapStyle}><Text style={styles.label}>Father's / Guardian's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.father_name} onChangeText={(t) => setFormData({...formData, father_name: t})} /></View>
-                <View style={wrapStyle}><Text style={styles.label}>Mother's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.mother_name} onChangeText={(t) => setFormData({...formData, mother_name: t})} /></View>
+                <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Full Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.full_name} onChangeText={(t) => setFormData({...formData, full_name: t})} /></View>
+                <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Father's / Guardian's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.father_name} onChangeText={(t) => setFormData({...formData, father_name: t})} /></View>
+                <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Mother's Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.mother_name} onChangeText={(t) => setFormData({...formData, mother_name: t})} /></View>
                 
-                <View style={wrapStyle}><Text style={styles.label}>Parents Status *</Text>
-                <TouchableOpacity style={dropStyle} onPress={() => setShowParentsDrop(!showParentsDrop)}><Text style={styles.dropdownBtnText}>{formData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
+                <View style={[wrapStyle, {zIndex: showParentsDrop ? 100 : 1}]}><Text style={styles.label}>Parents Status *</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setShowParentsDrop(!showParentsDrop)}><Text style={[styles.dropdownBtnText, !formData.parents_status && {color: '#94A3B8'}]}>{formData.parents_status || 'SELECT STATUS'}</Text></TouchableOpacity>
                 {showParentsDrop && ( <View style={styles.dropdownList}>{['BOTH ALIVE', 'FATHER DECEASED', 'MOTHER DECEASED', 'BOTH DECEASED'].map((s) => ( <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setFormData({...formData, parents_status: s}); setShowParentsDrop(false); }}><Text style={styles.dropdownItemText}>{s}</Text></TouchableOpacity> ))}</View> )}
                 </View>
 
-                <View style={wrapStyle}><Text style={styles.label}>Gender *</Text>
-                <TouchableOpacity style={dropStyle} onPress={() => setShowGenderDropdown(!showGenderDropdown)}><Text style={styles.dropdownBtnText}>{formData.gender || 'SELECT GENDER'}</Text></TouchableOpacity>
+                <View style={[wrapStyle, {zIndex: showGenderDropdown ? 100 : 1}]}><Text style={styles.label}>Gender *</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setShowGenderDropdown(!showGenderDropdown)}><Text style={[styles.dropdownBtnText, !formData.gender && {color: '#94A3B8'}]}>{formData.gender || 'SELECT GENDER'}</Text></TouchableOpacity>
                 {showGenderDropdown && <View style={styles.dropdownList}>{GENDERS.map((g) => (<TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => { setFormData({...formData, gender: g}); setShowGenderDropdown(false); }}><Text style={styles.dropdownItemText}>{g}</Text></TouchableOpacity>))}</View>}
                 </View>
 
-                <View style={wrapStyle}><Text style={styles.label}>Date of Birth *</Text>
+                <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Date of Birth *</Text>
                 {Platform.OS === 'web' ? <input type="date" style={webDateStyle} value={formData.dob} onChange={handleWebDateChange} /> : <View><TouchableOpacity onPress={() => setShowDatePicker(true)}><View style={{ pointerEvents: 'none' }}><TextInput style={styles.input} placeholder="YYYY-MM-DD" value={formData.dob} editable={false} /></View></TouchableOpacity>{showDatePicker && <DateTimePicker value={dobDate} mode="date" display="default" onChange={handleDateChange} />}</View>}
                 </View>
 
-                <View style={wrapStyle}><Text style={styles.label}>Calculated Age</Text><TextInput style={[styles.input, { backgroundColor: '#F1F5F9', color: '#94A3B8' }]} value={age} editable={false} placeholder="Select DOB first" /></View>
+                <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Calculated Age</Text><TextInput style={[styles.input, { backgroundColor: '#F1F5F9', color: '#94A3B8' }]} value={age} editable={false} placeholder="Select DOB first" /></View>
 
-                <View style={wrapStyle}><Text style={styles.label}>Blood Group</Text>
-                <TouchableOpacity style={dropStyle} onPress={() => setShowBloodDropdown(!showBloodDropdown)}><Text style={styles.dropdownBtnText}>{formData.blood_group || 'SELECT BLOOD GROUP'}</Text></TouchableOpacity>
+                <View style={[wrapStyle, {zIndex: showBloodDropdown ? 100 : 1}]}><Text style={styles.label}>Blood Group</Text>
+                <TouchableOpacity style={dropStyle} onPress={() => setShowBloodDropdown(!showBloodDropdown)}><Text style={[styles.dropdownBtnText, !formData.blood_group && {color: '#94A3B8'}]}>{formData.blood_group || 'SELECT BLOOD GROUP'}</Text></TouchableOpacity>
                 {showBloodDropdown && <View style={styles.dropdownList}>{BLOOD_GROUPS.map((bg) => (<TouchableOpacity key={bg} style={styles.dropdownItem} onPress={() => { setFormData({...formData, blood_group: bg}); setShowBloodDropdown(false); }}><Text style={styles.dropdownItemText}>{bg}</Text></TouchableOpacity>))}</View>}
                 </View>
 
-                {role === 'MEMBER' && ( 
-                  <View style={wrapStyle}><Text style={styles.label}>Marital Status</Text>
-                  <TouchableOpacity style={dropStyle} onPress={() => setShowMaritalDropdown(!showMaritalDropdown)}><Text style={styles.dropdownBtnText}>{formData.marital_status || 'SELECT STATUS'}</Text></TouchableOpacity> 
+                {(role === 'MEMBER' || role === 'ADMIN') && ( 
+                  <View style={[wrapStyle, {zIndex: showMaritalDropdown ? 100 : 1}]}><Text style={styles.label}>Marital Status</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setShowMaritalDropdown(!showMaritalDropdown)}><Text style={[styles.dropdownBtnText, !formData.marital_status && {color: '#94A3B8'}]}>{formData.marital_status || 'SELECT STATUS'}</Text></TouchableOpacity> 
                   {showMaritalDropdown && <View style={styles.dropdownList}>{MARITAL_STATUS.map((ms) => (<TouchableOpacity key={ms} style={styles.dropdownItem} onPress={() => { setFormData({...formData, marital_status: ms}); setShowMaritalDropdown(false); }}><Text style={styles.dropdownItemText}>{ms}</Text></TouchableOpacity>))}</View>} 
                   </View> 
                 )}
 
-                <View style={wrapStyle}><Text style={styles.label}>Aadhaar Number (12-Digits) *</Text>
+                <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Aadhaar Number (12-Digits) *</Text>
                 <TextInput style={styles.input} keyboardType="numeric" maxLength={12} value={formData.aadhaar_number} onChangeText={(t) => setFormData({...formData, aadhaar_number: t})} />
                 </View>
               </View>
-            </>
+            </View>
           )}
 
-
           {step === 2 && (
-            <>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
-                {role === 'MEMBER' && (
+            <View style={{ zIndex: 100 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 90 }}>
+                {(role === 'MEMBER' || role === 'ADMIN') && (
                   <>
-                    <View style={wrapStyle}><Text style={styles.label}>Educational Category</Text>
-                    <TouchableOpacity style={dropStyle} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={styles.dropdownBtnText}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
+                    <View style={[wrapStyle, {zIndex: showEduDropdown ? 100 : 1}]}><Text style={styles.label}>Educational Category</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={[styles.dropdownBtnText, !formData.educational_qualification && {color: '#94A3B8'}]}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
                     {showEduDropdown && <View style={styles.dropdownList}>{EDU_CATEGORIES.map((el) => (<TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => { setFormData({...formData, educational_qualification: el}); setShowEduDropdown(false); }}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>))}</View>}
                     </View>
-                    <View style={wrapStyle}><Text style={styles.label}>Course / Major Specialization</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} /></View>
-                    <View style={wrapStyle}><Text style={styles.label}>Occupation / Job Title</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.occupation} onChangeText={(t) => setFormData({...formData, occupation: t})} /></View>
+                    <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Course / Major Specialization</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} /></View>
+                    <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Occupation / Job Title</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.occupation} onChangeText={(t) => setFormData({...formData, occupation: t})} /></View>
                   </>
                 )}
                 {role === 'STUDENT' && (
                   <>
-                    <View style={wrapStyle}><Text style={styles.label}>Class / Grade</Text>
-                    <TouchableOpacity style={dropStyle} onPress={() => setShowClassDropdown(!showClassDropdown)}><Text style={styles.dropdownBtnText}>{formData.class_grade || 'SELECT CLASS / GRADE'}</Text></TouchableOpacity>
+                    <View style={[wrapStyle, {zIndex: showClassDropdown ? 100 : 1}]}><Text style={styles.label}>Class / Grade</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowClassDropdown(!showClassDropdown)}><Text style={[styles.dropdownBtnText, !formData.class_grade && {color: '#94A3B8'}]}>{formData.class_grade || 'SELECT CLASS / GRADE'}</Text></TouchableOpacity>
                     {showClassDropdown && <View style={styles.dropdownList}><ScrollView nestedScrollEnabled style={{maxHeight: 200}}>{CLASSES.map((c) => (<TouchableOpacity key={c} style={styles.dropdownItem} onPress={() => { setFormData({...formData, class_grade: c}); setShowClassDropdown(false); }}><Text style={styles.dropdownItemText}>{c}</Text></TouchableOpacity>))}</ScrollView></View>}
                     </View>
 
                     {isCollegeEdit && (
                       <>
-                        <View style={wrapStyle}><Text style={styles.label}>Educational Category</Text>
-                        <TouchableOpacity style={dropStyle} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={styles.dropdownBtnText}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
+                        <View style={[wrapStyle, {zIndex: showEduDropdown ? 100 : 1}]}><Text style={styles.label}>Educational Category</Text>
+                        <TouchableOpacity style={dropStyle} onPress={() => setShowEduDropdown(!showEduDropdown)}><Text style={[styles.dropdownBtnText, !formData.educational_qualification && {color: '#94A3B8'}]}>{formData.educational_qualification || 'SELECT CATEGORY'}</Text></TouchableOpacity>
                         {showEduDropdown && <View style={styles.dropdownList}>{EDU_CATEGORIES.map((el) => (<TouchableOpacity key={el} style={styles.dropdownItem} onPress={() => { setFormData({...formData, educational_qualification: el}); setShowEduDropdown(false); }}><Text style={styles.dropdownItemText}>{el}</Text></TouchableOpacity>))}</View>}
                         </View>
-                        <View style={wrapStyle}><Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} /></View>
+                        <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Course / Major Details</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.course_details} onChangeText={(t) => setFormData({...formData, course_details: t})} /></View>
                       </>
                     )}
 
-                    <View style={wrapStyle}><Text style={styles.label}>Institution Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_name} onChangeText={(t) => setFormData({...formData, school_name: t})} /></View>
+                    <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Institution Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_name} onChangeText={(t) => setFormData({...formData, school_name: t})} /></View>
                     
-                    <View style={wrapStyle}><Text style={styles.label}>{isCollegeEdit ? 'College Type' : 'School Type'}</Text>
-                    <TouchableOpacity style={dropStyle} onPress={() => setShowSchoolTypeDropdown(!showSchoolTypeDropdown)}><Text style={styles.dropdownBtnText}>{formData.school_type || 'SELECT TYPE'}</Text></TouchableOpacity>
+                    <View style={[wrapStyle, {zIndex: showSchoolTypeDropdown ? 100 : 1}]}><Text style={styles.label}>{isCollegeEdit ? 'College Type' : 'School Type'}</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowSchoolTypeDropdown(!showSchoolTypeDropdown)}><Text style={[styles.dropdownBtnText, !formData.school_type && {color: '#94A3B8'}]}>{formData.school_type || 'SELECT TYPE'}</Text></TouchableOpacity>
                     {showSchoolTypeDropdown && <View style={styles.dropdownList}>{(isCollegeEdit ? COLLEGE_TYPES : SCHOOL_TYPES).map((st) => (<TouchableOpacity key={st} style={styles.dropdownItem} onPress={() => { setFormData({...formData, school_type: st}); setShowSchoolTypeDropdown(false); }}><Text style={styles.dropdownItemText}>{st}</Text></TouchableOpacity>))}</View>}
                     </View>
 
-                    <View style={wrapStyle}><Text style={styles.label}>Institution Location / Village</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_location} onChangeText={(t) => setFormData({...formData, school_location: t})} /></View>
+                    <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Institution Location / Village</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.school_location} onChangeText={(t) => setFormData({...formData, school_location: t})} /></View>
                     
-                    <View style={wrapStyle}><Text style={styles.label}>Medium of Instruction</Text>
-                    <TouchableOpacity style={dropStyle} onPress={() => setShowMediumDropdown(!showMediumDropdown)}><Text style={styles.dropdownBtnText}>{formData.medium_of_instruction || 'SELECT MEDIUM'}</Text></TouchableOpacity>
+                    <View style={[wrapStyle, {zIndex: showMediumDropdown ? 100 : 1}]}><Text style={styles.label}>Medium of Instruction</Text>
+                    <TouchableOpacity style={dropStyle} onPress={() => setShowMediumDropdown(!showMediumDropdown)}><Text style={[styles.dropdownBtnText, !formData.medium_of_instruction && {color: '#94A3B8'}]}>{formData.medium_of_instruction || 'SELECT MEDIUM'}</Text></TouchableOpacity>
                     {showMediumDropdown && <View style={styles.dropdownList}>{MEDIUMS.map((md) => (<TouchableOpacity key={md} style={styles.dropdownItem} onPress={() => { setFormData({...formData, medium_of_instruction: md}); setShowMediumDropdown(false); }}><Text style={styles.dropdownItemText}>{md}</Text></TouchableOpacity>))}</View>}
                     </View>
                   </>
                 )}
               </View>
 
-              <Text style={[styles.label, {marginTop: 10}]}>{role === 'MEMBER' ? 'Completed Islamic Studies?' : 'Pursuing Islamic Studies?'}</Text>
-              <View style={{flexDirection: 'row', gap: 10, marginBottom: 24}}>
-                <TouchableOpacity style={[styles.filterChip, formData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setFormData({...formData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, formData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.filterChip, formData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setFormData({...formData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, formData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
+              <View style={{ zIndex: 80, marginTop: 10 }}>
+                <Text style={styles.label}>{(role === 'MEMBER' || role === 'ADMIN') ? 'Completed Islamic Studies?' : 'Pursuing Islamic Studies?'}</Text>
+                <View style={{flexDirection: 'row', gap: 10, marginBottom: 24}}>
+                  <TouchableOpacity style={[styles.filterChip, formData.islamic_studies==='YES' && styles.filterChipActive]} onPress={()=>setFormData({...formData, islamic_studies: 'YES'})}><Text style={[styles.filterChipText, formData.islamic_studies==='YES' && {color:'white'}]}>Yes</Text></TouchableOpacity>
+                  <TouchableOpacity style={[styles.filterChip, formData.islamic_studies==='NO' && styles.filterChipActive]} onPress={()=>setFormData({...formData, islamic_studies: 'NO'})}><Text style={[styles.filterChipText, formData.islamic_studies==='NO' && {color:'white'}]}>No</Text></TouchableOpacity>
+                </View>
               </View>
 
               {formData.islamic_studies === 'YES' && (
-                <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 20, backgroundColor: '#F8FAFC', borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0'}}>
-                  <View style={wrapStyle}><Text style={styles.label}>Islamic Qualification</Text>
-                  <TouchableOpacity style={dropStyle} onPress={() => setShowIslamicDrop(!showIslamicDrop)}><Text style={styles.dropdownBtnText}>{formData.islamic_qualification || 'SELECT QUALIFICATION'}</Text></TouchableOpacity>
+                <View style={{flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, padding: 20, backgroundColor: '#F8FAFC', borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 70}}>
+                  <View style={[wrapStyle, {zIndex: showIslamicDrop ? 100 : 1}]}><Text style={styles.label}>Islamic Qualification</Text>
+                  <TouchableOpacity style={dropStyle} onPress={() => setShowIslamicDrop(!showIslamicDrop)}><Text style={[styles.dropdownBtnText, !formData.islamic_qualification && {color: '#94A3B8'}]}>{formData.islamic_qualification || 'SELECT QUALIFICATION'}</Text></TouchableOpacity>
                   {showIslamicDrop && <View style={styles.dropdownList}>{ISLAMIC_QUALS.map((iq) => (<TouchableOpacity key={iq} style={styles.dropdownItem} onPress={() => { setFormData({...formData, islamic_qualification: iq}); setShowIslamicDrop(false); }}><Text style={styles.dropdownItemText}>{iq}</Text></TouchableOpacity>))}</View>}
                   </View>
 
                   {formData.islamic_qualification === 'OTHERS' && ( 
-                    <View style={wrapStyle}><Text style={styles.label}>Specify Qualification</Text><TextInput style={styles.input} autoCapitalize="characters" value={customIslamic} onChangeText={t => setCustomIslamic(t)} /></View> 
+                    <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Specify Qualification</Text><TextInput style={styles.input} autoCapitalize="characters" value={customIslamic} onChangeText={t => setCustomIslamic(t)} /></View> 
                   )}
 
-                  <View style={wrapStyle}><Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_name} onChangeText={t => setFormData({...formData, madrasa_name: t})} /></View>
-                  <View style={wrapStyle}><Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_location} onChangeText={t => setFormData({...formData, madrasa_location: t})} /></View>
+                  <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Madrasa Name</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_name} onChangeText={t => setFormData({...formData, madrasa_name: t})} /></View>
+                  <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Madrasa Location</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.madrasa_location} onChangeText={t => setFormData({...formData, madrasa_location: t})} /></View>
                 </View>
               )}
-            </>
+            </View>
           )}
 
-
           {step === 3 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 100 }}>
               {role === 'STUDENT' && ( <View style={wrapStyle}><Text style={styles.label}>Student Mobile Number</Text><TextInput style={styles.input} keyboardType="numeric" maxLength={10} value={formData.student_mobile} onChangeText={(t) => setFormData({...formData, student_mobile: t})} /></View> )}
               
               <View style={wrapStyle}><Text style={styles.label}>{role === 'MEMBER' ? 'Primary Mobile Number *' : "Parent's Mobile Number *"}</Text>
@@ -2276,7 +2478,7 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
                 </View>
               )}
 
-              <View style={wrapStyle}><Text style={styles.label}>Native Place</Text>
+              <View style={[wrapStyle, {zIndex: showNativeDropdown ? 100 : 1}]}><Text style={styles.label}>Native Place</Text>
               <TouchableOpacity style={dropStyle} onPress={() => setShowNativeDropdown(!showNativeDropdown)}><Text style={styles.dropdownBtnText}>{formData.native_place || 'SELECT NATIVE PLACE'}</Text></TouchableOpacity>
               {showNativeDropdown && <View style={styles.dropdownList}>{NATIVE_PLACES.map((place) => (<TouchableOpacity key={place} style={styles.dropdownItem} onPress={() => { setFormData({...formData, native_place: place}); setShowNativeDropdown(false); }}><Text style={styles.dropdownItemText}>{place}</Text></TouchableOpacity>))}</View>}
               </View>
@@ -2284,11 +2486,8 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
               {formData.native_place === 'OTHERS' && ( <View style={wrapStyle}><Text style={styles.label}>Specify Native Place</Text><TextInput style={styles.input} autoCapitalize="characters" value={customNative} onChangeText={(t) => setCustomNative(t)} /></View> )}
               
               <View style={wrapStyle}><Text style={styles.label}>Current Location (City/Town)</Text><TextInput style={styles.input} autoCapitalize="characters" value={formData.current_location} onChangeText={(t) => setFormData({...formData, current_location: t})} /></View>
-              
               <View style={wrapStyle}><Text style={styles.label}>Email Address</Text><TextInput style={styles.input} autoCapitalize="characters" keyboardType="email-address" value={formData.email} onChangeText={(t) => setFormData({...formData, email: t})} /></View>
-              
               {!isAdminAuth && ( <View style={wrapStyle}><Text style={styles.label}>Create Portal Password *</Text><TextInput style={styles.input} secureTextEntry={true} value={formData.password} onChangeText={(t) => setFormData({...formData, password: t})} /></View> )}
-              
               <View style={{width: '100%'}}><Text style={styles.label}>Full Permanent Address</Text><TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} multiline={true} autoCapitalize="characters" value={formData.address} onChangeText={(t) => setFormData({...formData, address: t})} /></View>
             </View>
           )}
@@ -2340,7 +2539,6 @@ function DonationPortal({ currentUser, onViewReceipt, onBack = () => {} }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 24 }}>
-      <TouchableOpacity onPress={() => onBack('dashboard')} style={{marginBottom: 16}}><Text style={{color: '#004085', fontWeight: '800'}}>← Back to Dashboard</Text></TouchableOpacity>
       <View style={styles.formCard}>
         <Text style={styles.sectionTitle}>Make a Donation</Text>
         <Text style={styles.label}>Reason / Purpose</Text><TextInput style={styles.input} placeholder="E.G. FOOD DISTRIBUTION" autoCapitalize="characters" value={reason} onChangeText={(t) => setReason(t)} />
@@ -2353,7 +2551,7 @@ function DonationPortal({ currentUser, onViewReceipt, onBack = () => {} }) {
       <View style={styles.formCard}>
         {history.length === 0 ? <Text style={{color: '#64748B'}}>No donations found.</Text> : history.map((txn, idx) => (
           <View key={idx} style={styles.historyRow}>
-            <View style={{ flex: 1, marginRight: 10 }}><Text style={{ fontWeight: '700', color: '#004085', fontSize: 16 }}>{txn.reason}</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>{new Date(txn.transaction_date).toLocaleDateString()}</Text></View>
+            <View style={{ flex: 1, marginRight: 10 }}><Text style={{ fontWeight: '700', color: '#004085', fontSize: 16 }}>{txn.reason}</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>{new Date(txn.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text></View>
             <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 18, fontWeight: '700', color: '#10B981', marginBottom: 8 }}>₹{txn.amount}</Text><TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity></View>
           </View>
         ))}
@@ -2364,12 +2562,12 @@ function DonationPortal({ currentUser, onViewReceipt, onBack = () => {} }) {
 
 
 // --- SUBSCRIPTION SCREEN ---
-function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt, onBack = () => {} }) {
+function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt }) {
   const [monthsCount, setMonthsCount] = useState('1');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [monthlyRate, setMonthlyRate] = useState(0);
   const [history, setHistory] = useState([]);
-
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => { 
     const getRate = async () => { try { const sDoc = await getDoc(doc(db, 'settings', 'global')); if(sDoc.exists()) setMonthlyRate(sDoc.data().monthly_subscription_amount || 0); } catch(e){} }; 
@@ -2377,10 +2575,7 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt, onBack
     getRate(); fetchTxns();
   }, [currentUser]);
 
-
   const totalAmount = monthlyRate * (parseInt(monthsCount) || 1);
-
-
   const joinDate = currentUser.join_date ? new Date(currentUser.join_date) : new Date(); 
   const currentDate = new Date();
   const monthsSinceJoined = ((currentDate.getFullYear() - joinDate.getFullYear()) * 12) + (currentDate.getMonth() - joinDate.getMonth()) + 1; 
@@ -2388,17 +2583,18 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt, onBack
   const duesMonths = Math.max(0, monthsSinceJoined - totalPaid);
   const duesAmount = duesMonths * monthlyRate;
 
-
-  const paidUpTo = new Date(joinDate);
-  paidUpTo.setMonth(paidUpTo.getMonth() + totalPaid);
-  const paidUpToText = paidUpTo.toLocaleDateString('default', { month: 'long', year: 'numeric' });
-
+  let paidUpToText = "No payments yet";
+  if (totalPaid > 0) {
+     const paidUpTo = new Date(joinDate);
+     // Subtract 1 because paying 1 month covers the current month, not the next month
+     paidUpTo.setMonth(paidUpTo.getMonth() + totalPaid - 1); 
+     paidUpToText = paidUpTo.toLocaleDateString('default', { month: 'long', year: 'numeric' });
+  }
 
   const handleUPIPayment = async () => {
     setIsSubmitting(true);
     const upiSuccess = await openUPI(totalAmount, 'MONTHLY SUBSCRIPTION');
     if (!upiSuccess) { setIsSubmitting(false); return; }
-
 
     const txnId = `UPI_${Date.now()}`;
     const parsedMonths = parseInt(monthsCount) || 1;
@@ -2409,17 +2605,20 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt, onBack
       await updateDoc(doc(db, 'members', currentUser.official_id), { total_months_paid: newTotalPaid });
       alert('Subscription Processed Successfully!');
       setCurrentUser({ ...currentUser, total_months_paid: newTotalPaid });
+      setShowPaymentModal(false);
       onViewReceipt({ ...payload, official_id: currentUser.official_id });
     } catch (error) { alert('Connection failed.'); } finally { setIsSubmitting(false); }
   };
 
-
   return (
     <ScrollView contentContainerStyle={{ padding: 24 }}>
-      <TouchableOpacity onPress={() => onBack('dashboard')} style={{marginBottom: 16}}><Text style={{color: '#004085', fontWeight: '800'}}>← Back to Dashboard</Text></TouchableOpacity>
-      
       <View style={[styles.formCard, {backgroundColor: '#002752', borderColor: '#001a38'}]}>
-        <Text style={[styles.sectionTitle, {color: 'white', marginBottom: 8}]}>My Subscription Status</Text>
+        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16}}>
+           <Text style={[styles.sectionTitle, {color: 'white', marginBottom: 0}]}>My Subscription Status</Text>
+           <TouchableOpacity style={[styles.button, {backgroundColor: '#10B981', marginTop: 0}]} onPress={() => setShowPaymentModal(true)}>
+             <Text style={styles.buttonText}>💵 Pay Advance / Clear Dues</Text>
+           </TouchableOpacity>
+        </View>
         <Text style={{color: '#CBD5E1', marginBottom: 16}}>Monthly Rate: ₹{monthlyRate}</Text>
         <View style={{flexDirection: 'row', gap: 16, flexWrap: 'wrap'}}>
            <View style={{flex: 1, minWidth: 150, backgroundColor: '#004085', padding: 16, borderRadius: 12}}>
@@ -2434,48 +2633,47 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt, onBack
         </View>
       </View>
 
-
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>Pay Advance / Clear Dues</Text>
-        <Text style={styles.label}>Quick Select Months</Text>
-        <View style={styles.quickSelectContainer}>
-           <TouchableOpacity style={[styles.quickBtn, monthsCount === '1' && styles.quickBtnActive]} onPress={() => setMonthsCount('1')}><Text style={[styles.quickBtnText, monthsCount === '1' && styles.quickBtnTextActive]}>1 Mo</Text></TouchableOpacity>
-           <TouchableOpacity style={[styles.quickBtn, monthsCount === '3' && styles.quickBtnActive]} onPress={() => setMonthsCount('3')}><Text style={[styles.quickBtnText, monthsCount === '3' && styles.quickBtnTextActive]}>3 Mo</Text></TouchableOpacity>
-           <TouchableOpacity style={[styles.quickBtn, monthsCount === '6' && styles.quickBtnActive]} onPress={() => setMonthsCount('6')}><Text style={[styles.quickBtnText, monthsCount === '6' && styles.quickBtnTextActive]}>6 Mo</Text></TouchableOpacity>
-           <TouchableOpacity style={[styles.quickBtn, monthsCount === '12' && styles.quickBtnActive]} onPress={() => setMonthsCount('12')}><Text style={[styles.quickBtnText, monthsCount === '12' && styles.quickBtnTextActive]}>1 Year</Text></TouchableOpacity>
-        </View>
-        <Text style={styles.label}>Or Custom Months</Text><TextInput style={styles.input} keyboardType="numeric" value={monthsCount} onChangeText={setMonthsCount} />
-        <View style={styles.totalBox}><Text style={styles.totalBoxText}>Total Amount: ₹{totalAmount}</Text></View>
-        <TouchableOpacity style={styles.button} onPress={handleUPIPayment} disabled={isSubmitting}>{isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Pay via UPI</Text>}</TouchableOpacity>
-      </View>
-
-
-      <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Subscription History</Text>
+      <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Subscription History</Text>
       <View style={styles.formCard}>
         {history.length === 0 ? <Text style={{color: '#64748B'}}>No transactions found.</Text> : history.map((txn, idx) => (
           <View key={idx} style={styles.historyRow}>
-            <View style={{ flex: 1, marginRight: 10 }}><Text style={{ fontWeight: '700', color: '#004085', fontSize: 16 }}>{txn.months_count} Months Paid</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>{new Date(txn.transaction_date).toLocaleDateString()}</Text></View>
+            <View style={{ flex: 1, marginRight: 10 }}><Text style={{ fontWeight: '700', color: '#004085', fontSize: 16 }}>{txn.months_count} Months Paid</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>{new Date(txn.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text></View>
             <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 18, fontWeight: '700', color: '#10B981', marginBottom: 8 }}>₹{txn.amount}</Text><TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity></View>
           </View>
         ))}
       </View>
+
+      {/* NEW MODAL FOR PAYMENTS */}
+      {showPaymentModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={[styles.sectionTitle, {marginBottom: 12}]}>Select Months</Text>
+            <View style={styles.quickSelectContainer}>
+               <TouchableOpacity style={[styles.quickBtn, monthsCount === '1' && styles.quickBtnActive]} onPress={() => setMonthsCount('1')}><Text style={[styles.quickBtnText, monthsCount === '1' && styles.quickBtnTextActive]}>1 Mo</Text></TouchableOpacity>
+               <TouchableOpacity style={[styles.quickBtn, monthsCount === '3' && styles.quickBtnActive]} onPress={() => setMonthsCount('3')}><Text style={[styles.quickBtnText, monthsCount === '3' && styles.quickBtnTextActive]}>3 Mo</Text></TouchableOpacity>
+               <TouchableOpacity style={[styles.quickBtn, monthsCount === '6' && styles.quickBtnActive]} onPress={() => setMonthsCount('6')}><Text style={[styles.quickBtnText, monthsCount === '6' && styles.quickBtnTextActive]}>6 Mo</Text></TouchableOpacity>
+               <TouchableOpacity style={[styles.quickBtn, monthsCount === '12' && styles.quickBtnActive]} onPress={() => setMonthsCount('12')}><Text style={[styles.quickBtnText, monthsCount === '12' && styles.quickBtnTextActive]}>1 Year</Text></TouchableOpacity>
+            </View>
+            <Text style={styles.label}>Or Custom Months</Text><TextInput style={styles.input} keyboardType="numeric" value={monthsCount} onChangeText={setMonthsCount} />
+            <View style={styles.totalBox}><Text style={styles.totalBoxText}>Total: ₹{totalAmount}</Text></View>
+            
+            <View style={{flexDirection: 'row', gap: 12, marginTop: 12}}>
+               <TouchableOpacity style={[styles.button, {flex: 1, backgroundColor: '#64748B'}]} onPress={() => setShowPaymentModal(false)}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity>
+               <TouchableOpacity style={[styles.button, {flex: 1}]} onPress={handleUPIPayment} disabled={isSubmitting}>{isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Pay via UPI</Text>}</TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 
 // --- FUNDRAISING LIST SCREEN ---
-function FundraisingListScreen({ currentUser, onSelectCampaign, onBack = () => {}, onViewReceipt }) {
+function FundraisingListScreen({ currentUser, onSelectCampaign, onViewReceipt }) {
   const [campaigns, setCampaigns] = useState([]);
   const [history, setHistory] = useState([]);
-  const [showPast, setShowPast] = useState(globalShowPastDrives);
-
-
-  const togglePast = (val) => {
-    setShowPast(val);
-    globalShowPastDrives = val;
-  };
-
+  const [showPastModal, setShowPastModal] = useState(false); // NEW STATE FOR MODAL
 
   useEffect(() => { 
     const fetchData = async () => { 
@@ -2490,85 +2688,86 @@ function FundraisingListScreen({ currentUser, onSelectCampaign, onBack = () => {
     fetchData(); 
   }, [currentUser]);
 
-
   const activeCamps = campaigns.filter(c => {
      const isGoalMet = (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1);
      return c.status === 'ACTIVE' && !isGoalMet;
   });
-
 
   const pastCamps = campaigns.filter(c => {
      const isGoalMet = (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1);
      return c.status === 'STOPPED' || c.status === 'PAUSED' || isGoalMet;
   });
 
+  const renderCampCard = (camp, isPast) => {
+    const raised = parseFloat(camp.raised_amount) || 0; const target = parseFloat(camp.target_amount) || 1; 
+    const progress = Math.min(Math.round((raised / target) * 100), 100);
+    const goalAchieved = raised >= target;
+    const isStopped = camp.status === 'STOPPED' || goalAchieved;
+    const isPaused = camp.status === 'PAUSED';
 
-  const displayCamps = showPast ? pastCamps : activeCamps;
+    return (
+      <TouchableOpacity key={camp.campaign_id} style={[styles.formCard, (isStopped || isPast) && {opacity: 0.9, backgroundColor: '#F8FAFC', marginBottom: 12}]} onPress={() => { setShowPastModal(false); onSelectCampaign(camp); }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Text style={[styles.sectionTitle, {marginBottom: 0, flex: 1}]} numberOfLines={1}>{camp.title}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: goalAchieved ? '#10B981' : isPaused ? '#F59E0B' : camp.status === 'STOPPED' ? '#EF4444' : '#3B82F6' }]}>
+            <Text style={{ color: 'white', fontSize: 11, fontWeight: 'bold' }}>{goalAchieved ? 'GOAL ACHIEVED' : camp.status}</Text>
+          </View>
+        </View>
+        <Text style={{ color: '#64748B', marginBottom: 16, fontWeight: '500' }} numberOfLines={2}>{camp.description}</Text>
+        
+        {camp.remarks && (isStopped || isPaused) ? (
+           <View style={{backgroundColor: '#FEF2F2', padding: 12, borderRadius: 8, marginBottom: 16}}>
+             <Text style={{color: '#991B1B', fontWeight: '800', fontSize: 12}}>REMARKS: {camp.remarks}</Text>
+           </View>
+        ) : null}
 
+        <View style={{ height: 12, backgroundColor: '#E2E8F0', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}><View style={{ width: `${progress}%`, backgroundColor: goalAchieved ? '#10B981' : '#3B82F6', height: '100%' }} /></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ fontWeight: '700', color: '#004085' }}>Raised: ₹{raised}</Text><Text style={{ fontWeight: '700', color: goalAchieved ? '#10B981' : '#3B82F6' }}>Goal: ₹{target}</Text></View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24 }}>
-      <TouchableOpacity onPress={() => { if (showPast) togglePast(false); else onBack('dashboard'); }} style={{marginBottom: 16}}><Text style={{color: '#004085', fontWeight: '800'}}>← {showPast ? 'Back to Active Drives' : 'Back to Dashboard'}</Text></TouchableOpacity>
-      
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-         <Text style={styles.sectionTitle}>{showPast ? 'Past / Paused Drives' : 'Active Fund Drives'}</Text>
-         {!showPast && (
-           <TouchableOpacity style={styles.neatBtnDark} onPress={() => togglePast(true)}>
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: 24 }}>
+        
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+           <Text style={styles.sectionTitle}>Active Fund Drives</Text>
+           <TouchableOpacity style={styles.neatBtnDark} onPress={() => setShowPastModal(true)}>
               <Text style={styles.neatBtnTextDark}>View Past Drives</Text>
            </TouchableOpacity>
-         )}
-      </View>
+        </View>
 
+        {activeCamps.length === 0 && <Text style={{color: '#64748B', marginBottom: 24}}>No active drives found.</Text>}
+        {activeCamps.map((camp) => renderCampCard(camp, false))}
 
-      {displayCamps.length === 0 && <Text style={{color: '#64748B', marginBottom: 24}}>No drives found.</Text>}
-
-
-      {displayCamps.map((camp) => {
-        const raised = parseFloat(camp.raised_amount) || 0; const target = parseFloat(camp.target_amount) || 1; 
-        const progress = Math.min(Math.round((raised / target) * 100), 100);
-        const goalAchieved = raised >= target;
-        const isStopped = camp.status === 'STOPPED' || goalAchieved;
-        const isPaused = camp.status === 'PAUSED';
-
-
-        return (
-          <TouchableOpacity key={camp.campaign_id} style={[styles.formCard, isStopped && {opacity: 0.8, backgroundColor: '#F8FAFC'}]} onPress={() => onSelectCampaign(camp)}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={styles.sectionTitle}>{camp.title}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: goalAchieved ? '#10B981' : isPaused ? '#F59E0B' : camp.status === 'STOPPED' ? '#EF4444' : '#3B82F6' }]}>
-                <Text style={{ color: 'white', fontSize: 11, fontWeight: 'bold' }}>{goalAchieved ? 'GOAL ACHIEVED' : camp.status}</Text>
-              </View>
+        <Text style={[styles.sectionTitle, { marginTop: 32 }]}>My Campaign Contributions</Text>
+        <View style={styles.formCard}>
+          {history.length === 0 ? <Text style={{color: '#64748B'}}>No contributions yet.</Text> : history.map((txn, idx) => (
+            <View key={idx} style={styles.historyRow}>
+              <View style={{ flex: 1, marginRight: 10 }}><Text style={{ fontWeight: '700', color: '#004085', fontSize: 16 }}>{txn.reason}</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>{new Date(txn.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text></View>
+              <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 18, fontWeight: '700', color: '#10B981', marginBottom: 8 }}>₹{txn.amount}</Text><TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity></View>
             </View>
-            <Text style={{ color: '#64748B', marginBottom: 16, fontWeight: '500' }} numberOfLines={2}>{camp.description}</Text>
-            
-            {camp.remarks && (isStopped || isPaused) ? (
-               <View style={{backgroundColor: '#FEF2F2', padding: 12, borderRadius: 8, marginBottom: 16}}>
-                 <Text style={{color: '#991B1B', fontWeight: '800', fontSize: 12}}>REMARKS: {camp.remarks}</Text>
-               </View>
-            ) : null}
+          ))}
+        </View>
+      </ScrollView>
 
-
-            <View style={{ height: 12, backgroundColor: '#E2E8F0', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}><View style={{ width: `${progress}%`, backgroundColor: goalAchieved ? '#10B981' : '#3B82F6', height: '100%' }} /></View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ fontWeight: '700', color: '#004085' }}>Raised: ₹{raised}</Text><Text style={{ fontWeight: '700', color: goalAchieved ? '#10B981' : '#3B82F6' }}>Goal: ₹{target}</Text></View>
-          </TouchableOpacity>
-        );
-      })}
-
-
-      {!showPast && (
-        <>
-          <Text style={[styles.sectionTitle, { marginTop: 32 }]}>My Campaign Contributions</Text>
-          <View style={styles.formCard}>
-            {history.length === 0 ? <Text style={{color: '#64748B'}}>No contributions yet.</Text> : history.map((txn, idx) => (
-              <View key={idx} style={styles.historyRow}>
-                <View style={{ flex: 1, marginRight: 10 }}><Text style={{ fontWeight: '700', color: '#004085', fontSize: 16 }}>{txn.reason}</Text><Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>{new Date(txn.transaction_date).toLocaleDateString()}</Text></View>
-                <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 18, fontWeight: '700', color: '#10B981', marginBottom: 8 }}>₹{txn.amount}</Text><TouchableOpacity style={styles.receiptBtn} onPress={() => onViewReceipt(txn)}><Text style={styles.receiptBtnText}>📄 Receipt</Text></TouchableOpacity></View>
-              </View>
-            ))}
+      {/* PAST CAMPAIGNS OVERLAY MODAL */}
+      {showPastModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, {maxWidth: 600, width: '90%', maxHeight: '90%', padding: 0, overflow: 'hidden'}]}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#F8FAFC'}}>
+               <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Past / Closed Drives</Text>
+               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setShowPastModal(false)}><Text style={styles.neatBtnTextDark}>✕ Close</Text></TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{padding: 24}}>
+               {pastCamps.length === 0 && <Text style={{color: '#64748B'}}>No past drives found.</Text>}
+               {pastCamps.map((camp) => renderCampCard(camp, true))}
+            </ScrollView>
           </View>
-        </>
+        </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -2683,7 +2882,7 @@ function CampaignDetailScreen({ campaign, currentUser, onBack, onViewReceipt }) 
 // --- RECEIPT PAGE ---
 function ReceiptPage({ receipt, currentUser, onBack }) {
   if (!receipt) return <View style={styles.container}><Text>No receipt data found.</Text></View>;
-  const txnDate = new Date(receipt.transaction_date || Date.now()).toLocaleDateString();
+  const txnDate = new Date(receipt.transaction_date || Date.now()).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const displayId = receipt.official_id || currentUser?.official_id;
   const displayName = receipt.full_name || currentUser?.full_name;
 
@@ -2839,9 +3038,9 @@ const styles = StyleSheet.create({
 
   dropdownBtn: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, padding: 14, marginBottom: 14, backgroundColor: '#FFFFFF' },
   dropdownBtnText: { fontSize: 14, color: '#1E293B', fontWeight: '600' },
-  dropdownList: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, marginBottom: 24, marginTop: -8, elevation: 2, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' },
+  dropdownList: { position: 'absolute', top: 72, left: 0, right: 0, zIndex: 9999, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, elevation: 10, overflow: 'hidden', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' },
   dropdownItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  dropdownItemText: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
+  dropdownItemText: { fontSize: 14, color: '#004085', fontWeight: '800' },
   filterLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 8, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   filterChipRow: { flexDirection: 'row', marginBottom: 12 },
   filterChip: { backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#CBD5E1' },
@@ -2860,7 +3059,7 @@ const styles = StyleSheet.create({
   statGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   statBoxLarge: { backgroundColor: '#004085', padding: 20, borderRadius: 16, flex: 1, alignItems: 'center', elevation: 2 },
   statLargeVal: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
-  statLargeKey: { fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 6, fontWeight: '600', textTransform: 'uppercase' },
+  statLargeKey: { fontSize: 12, color: '#E2E8F0', textAlign: 'center', marginTop: 6, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   statWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   statChip: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, width: '48%', flexDirection: 'column', borderWidth: 1, borderColor: '#E2E8F0' },
   statChipKey: { fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4 },
