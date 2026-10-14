@@ -235,29 +235,29 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
       {/* FIXED MODAL SCROLLING ROOT CONTAINER */}
       <View style={{ flex: 1, height: '100%', overflow: 'hidden', position: 'relative' }}>
         {currentView !== 'register' && (
-          <View style={[styles.contentHeader, { backgroundColor: '#F8FAFC', borderBottomWidth: 2, borderBottomColor: '#E2E8F0', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 }]}>
+          <View style={[styles.contentHeader, { backgroundColor: '#E0F2FE', borderBottomWidth: 3, borderBottomColor: '#38BDF8', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 {isMobile && (
-                  <TouchableOpacity onPress={() => setIsOpen(true)} style={{ marginRight: 12, padding: 8 }}>
-                    <Text style={{ fontSize: 24, color: '#004085' }}>☰</Text>
+                  <TouchableOpacity onPress={() => setIsOpen(true)} style={{ marginRight: 16, padding: 4 }}>
+                    <Text style={{ fontSize: 26, color: '#004085' }}>☰</Text>
                   </TouchableOpacity>
                 )}
-                <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} />
+                <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12, borderWidth: 1, borderColor: '#0284C7' }} />
                 <View style={{ flexShrink: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIYWA</Text>
-                  <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1, letterSpacing: 0.5 }} numberOfLines={1}>HIYWA</Text>
+                  <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '800', marginTop: 2, letterSpacing: 1 }}>MTK PURAM</Text>
                 </View>
               </View>
 
               {currentUser && currentView !== 'adminRegister' && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 16 }}>
-                   {!isMobile && <Text style={{ marginRight: 10, fontWeight: '800', color: '#004085', fontSize: 11, textTransform: 'uppercase' }}>{currentUser.full_name}</Text>}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12 }}>
+                   {!isMobile && <Text style={{ marginRight: 10, fontWeight: '800', color: '#0F172A', fontSize: 11, textTransform: 'uppercase' }}>{currentUser.full_name}</Text>}
                    <TouchableOpacity onPress={() => handleNav('profile')}>
                      {currentUser.profile_photo ? (
-                        <Image source={{uri: currentUser.profile_photo}} style={{width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: '#10B981'}} />
+                        <Image source={{uri: currentUser.profile_photo}} style={{width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: '#38BDF8'}} />
                      ) : (
-                        <View style={{width: 38, height: 38, borderRadius: 19, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#10B981'}}><Text style={{fontSize: 16}}>👤</Text></View>
+                        <View style={{width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#38BDF8'}}><Text style={{fontSize: 16}}>👤</Text></View>
                      )}
                    </TouchableOpacity>
                 </View>
@@ -301,14 +301,22 @@ function MainAppContent() {
 
   useEffect(() => {
     const backAction = () => {
+      if (currentView === 'login' || currentView === 'home' || currentView === 'admin_stats') {
+        Alert.alert("Exit HIYWA App", "Are you sure you want to exit?", [
+          { text: "Cancel", style: "cancel" }, 
+          { text: "YES, EXIT", style: "destructive", onPress: () => BackHandler.exitApp() }
+        ]);
+        return true; 
+      }
+      
+      // Step-back logic
       if (currentView === 'register') { setCurrentView('login'); return true; }
       if (currentView === 'campaignDetail') { setCurrentView('fundraising'); return true; }
       if (currentView === 'receipt') { setCurrentView(receiptBackView); return true; }
-      if (currentView === 'login' || currentView === 'home' || currentView === 'admin_stats') {
-        Alert.alert("Exit HIYWA App", "Are you sure you want to exit?", [{ text: "Cancel", style: "cancel" }, { text: "YES, EXIT", onPress: () => BackHandler.exitApp() }]);
-        return true; 
-      }
-      setCurrentView('home'); return true; 
+      
+      // If anywhere else (Profile, Finance, Users, etc.), go back to Home!
+      setCurrentView('home'); 
+      return true; 
     };
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
@@ -481,16 +489,24 @@ function HomeScreen({ currentUser, onNavigate }) {
   const { width } = useWindowDimensions();
 
   const fallbackImages = [
-    'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1574621100236-d26bea0f4760?auto=format&fit=crop&q=80&w=1200'
+    'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&q=80&w=1200',
+    'https://images.unsplash.com/photo-1564121211835-e88c852648ab?auto=format&fit=crop&q=80&w=1200',
+    'https://images.unsplash.com/photo-1519817650390-64a93db51149?auto=format&fit=crop&q=80&w=1200'
   ];
 
   const activeSlider = customSlider.length > 0 ? customSlider : fallbackImages;
 
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  // Splash Screen Animation States
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop( Animated.sequence([ Animated.timing(pulseAnim, { toValue: 1.05, duration: 1200, useNativeDriver: true }), Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }) ]) ).start();
+    // Splash Entrance Animation (Runs once on load)
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 20, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
+    ]).start();
+    
     const timer = setInterval(() => setCurrentImage(prev => prev + 1), 4000);
     return () => clearInterval(timer);
   }, []);
@@ -523,13 +539,13 @@ function HomeScreen({ currentUser, onNavigate }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 24 }}>
-      {/* PHOTO SLIDER WITH SILVER JUBILEE ANIMATION */}
-      <View style={{ width: '100%', height: width < 768 ? 300 : 450, backgroundColor: '#001a38', borderRadius: 20, overflow: 'hidden', marginBottom: 24, position: 'relative' }}>
-        <Image source={{ uri: activeSlider[currentImage % activeSlider.length] }} style={{ width: '100%', height: '100%', opacity: 0.6 }} resizeMode="contain" />
+      {/* PHOTO SLIDER WITH SPLASH ANIMATION */}
+      <View style={{ width: '100%', height: width < 768 ? (width - 48) : 450, backgroundColor: '#001a38', borderRadius: 20, overflow: 'hidden', marginBottom: 24, position: 'relative', elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <Image source={{ uri: activeSlider[currentImage % activeSlider.length] }} style={{ width: '100%', height: '100%', opacity: 0.6 }} resizeMode="cover" />
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
-           <Animated.View style={{ transform: [{ scale: pulseAnim }], alignItems: 'center' }}>
-             <Text style={{ color: '#FFD700', fontSize: width < 768 ? 28 : 42, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width: 2, height: 2}, textShadowRadius: 10 }}>🎉 25 YEARS OF HIYWA 🎉</Text>
-             <Text style={{ color: '#FFFFFF', fontSize: width < 768 ? 14 : 20, fontWeight: '700', marginTop: 8, letterSpacing: 2, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 5 }}>SILVER JUBILEE CELEBRATION</Text>
+           <Animated.View style={{ opacity: opacityAnim, transform: [{ scale: scaleAnim }], alignItems: 'center', paddingHorizontal: 16 }}>
+             <Text style={{ color: '#FFD700', fontSize: width < 768 ? 26 : 42, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width: 2, height: 2}, textShadowRadius: 10 }}>🎉 25 YEARS OF HIYWA 🎉</Text>
+             <Text style={{ color: '#FFFFFF', fontSize: width < 768 ? 12 : 20, fontWeight: '800', marginTop: 8, letterSpacing: 1, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 5 }}>SILVER JUBILEE CELEBRATION</Text>
            </Animated.View>
         </View>
       </View>
@@ -1898,7 +1914,11 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                     <FilterDropdown label="Gender" value={repGender} options={GENDERS} onSelect={setRepGender} />
                   </View>
                   <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
-                     <Text style={{fontWeight: '800', color: '#64748B'}}>Matches: {filteredRepDir.length} Records</Text>
+                     <View>
+                       {(repRole || repStatus || repBlood || repGender) ? (
+                         <Text style={{fontWeight: '500', fontSize: 12, color: '#64748B'}}>Matches: {filteredRepDir.length} Records</Text>
+                       ) : <View />}
+                     </View>
                      <View style={{flexDirection: 'row', gap: 12}}>
                        <TouchableOpacity style={styles.neatBtnDark} onPress={() => { setRepRole(''); setRepStatus(''); setRepBlood(''); setRepGender(''); }}><Text style={styles.neatBtnTextDark}>Clear Filters</Text></TouchableOpacity>
                        <TouchableOpacity style={styles.neatBtnSuccess} onPress={exportDirectory}><Text style={styles.neatBtnText}>📥 Export CSV</Text></TouchableOpacity>
@@ -1923,7 +1943,11 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                      </View>
                    </View>
                    <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
-                     <Text style={{fontWeight: '800', color: '#64748B'}}>Matches: {filteredRepFin.length} Transactions</Text>
+                     <View>
+                       {(repFinType || repStartDate || repEndDate) ? (
+                         <Text style={{fontWeight: '500', fontSize: 12, color: '#64748B'}}>Matches: {filteredRepFin.length} Transactions</Text>
+                       ) : <View />}
+                     </View>
                      <View style={{flexDirection: 'row', gap: 12}}>
                        <TouchableOpacity style={styles.neatBtnDark} onPress={() => { setRepFinType(''); setRepStartDate(''); setRepEndDate(''); }}>
                          <Text style={styles.neatBtnTextDark}>Clear Filters</Text>
@@ -1942,17 +1966,22 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                    <Text style={{color: 'white', fontWeight: '800', fontSize: 16}}>Data Preview (Max 100 Rows)</Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{padding: 16}}>
-                  <View style={{flexDirection: 'column', minWidth: repType === 'DIRECTORY' ? 1200 : 800}}>
+                  <View style={{flexDirection: 'column', minWidth: repType === 'DIRECTORY' ? 1800 : 800}}>
                     {/* Header Row */}
                     <View style={{flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: '#E2E8F0', paddingBottom: 10, marginBottom: 10}}>
                        {repType === 'DIRECTORY' ? (
                          <>
                            <Text style={{width: 120, fontWeight: '800', color: '#475569', fontSize: 12}}>ID</Text>
                            <Text style={{width: 180, fontWeight: '800', color: '#475569', fontSize: 12}}>Name</Text>
-                           <Text style={{width: 120, fontWeight: '800', color: '#475569', fontSize: 12}}>Role & Status</Text>
+                           <Text style={{width: 100, fontWeight: '800', color: '#475569', fontSize: 12}}>Role</Text>
+                           <Text style={{width: 100, fontWeight: '800', color: '#475569', fontSize: 12}}>Status</Text>
                            <Text style={{width: 120, fontWeight: '800', color: '#475569', fontSize: 12}}>Phone</Text>
+                           <Text style={{width: 60, fontWeight: '800', color: '#475569', fontSize: 12}}>Age</Text>
+                           <Text style={{width: 100, fontWeight: '800', color: '#475569', fontSize: 12}}>Blood</Text>
                            <Text style={{width: 150, fontWeight: '800', color: '#475569', fontSize: 12}}>Native Place</Text>
-                           <Text style={{flex: 1, fontWeight: '800', color: '#475569', fontSize: 12}}>Education / Occupation</Text>
+                           <Text style={{width: 200, fontWeight: '800', color: '#475569', fontSize: 12}}>Education</Text>
+                           <Text style={{width: 180, fontWeight: '800', color: '#475569', fontSize: 12}}>Occupation</Text>
+                           <Text style={{flex: 1, fontWeight: '800', color: '#475569', fontSize: 12}}>Address</Text>
                          </>
                        ) : (
                          <>
@@ -1965,16 +1994,24 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                     </View>
                     
                     {/* Data Rows */}
-                    {repType === 'DIRECTORY' && filteredRepDir.slice(0, 100).map(u => (
-                      <View key={u.official_id} style={{flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9'}}>
-                         <Text style={{width: 120, color: '#1E293B', fontSize: 12}}>{u.official_id}</Text>
-                         <Text style={{width: 180, color: '#1E293B', fontSize: 12, fontWeight: '600'}}>{u.full_name}</Text>
-                         <Text style={{width: 120, color: '#1E293B', fontSize: 12}}>{u.role} ({u.membership_status})</Text>
-                         <Text style={{width: 120, color: '#1E293B', fontSize: 12}}>{u.phone_number}</Text>
-                         <Text style={{width: 150, color: '#1E293B', fontSize: 12}} numberOfLines={1}>{u.native_place}</Text>
-                         <Text style={{flex: 1, color: '#1E293B', fontSize: 12}} numberOfLines={1}>{u.educational_qualification || u.class_grade} | {u.occupation}</Text>
-                      </View>
-                    ))}
+                    {repType === 'DIRECTORY' && filteredRepDir.slice(0, 100).map(u => {
+                      const uAge = u.dob ? (new Date().getFullYear() - new Date(u.dob).getFullYear()) : 'N/A';
+                      return (
+                        <View key={u.official_id} style={{flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9'}}>
+                           <Text style={{width: 120, color: '#1E293B', fontSize: 12}}>{u.official_id}</Text>
+                           <Text style={{width: 180, color: '#1E293B', fontSize: 12, fontWeight: '600'}}>{u.full_name}</Text>
+                           <Text style={{width: 100, color: '#1E293B', fontSize: 12}}>{u.role}</Text>
+                           <Text style={{width: 100, color: '#1E293B', fontSize: 12}}>{u.membership_status}</Text>
+                           <Text style={{width: 120, color: '#1E293B', fontSize: 12}}>{u.phone_number}</Text>
+                           <Text style={{width: 60, color: '#1E293B', fontSize: 12}}>{uAge}</Text>
+                           <Text style={{width: 100, color: '#1E293B', fontSize: 12}}>{u.blood_group || '-'}</Text>
+                           <Text style={{width: 150, color: '#1E293B', fontSize: 12}} numberOfLines={1}>{u.native_place || '-'}</Text>
+                           <Text style={{width: 200, color: '#1E293B', fontSize: 12}} numberOfLines={1}>{u.educational_qualification || u.class_grade || '-'}</Text>
+                           <Text style={{width: 180, color: '#1E293B', fontSize: 12}} numberOfLines={1}>{u.occupation || '-'}</Text>
+                           <Text style={{flex: 1, color: '#1E293B', fontSize: 12}} numberOfLines={1}>{u.address || '-'}</Text>
+                        </View>
+                      );
+                    })}
 
                     {repType === 'FINANCE' && filteredRepFin.slice(0, 100).map(t => (
                       <View key={t.transaction_id} style={{flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9'}}>
@@ -2358,9 +2395,15 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
             <ScrollView contentContainerStyle={{padding: 24}}>
                {pendingDuesList.length === 0 && <Text style={{color: '#64748B'}}>No pending dues found.</Text>}
                {pendingDuesList.map((u) => (
-                 <View key={u.official_id} style={styles.historyRow}>
-                   <View><Text style={{ fontWeight: '800', color: '#EF4444', fontSize: 16 }}>{u.full_name} ({u.official_id})</Text><Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, fontWeight: '600' }}>📞 {u.phone_number}</Text></View>
-                   <View style={{alignItems: 'flex-end'}}><Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444' }}>Owes ₹{u.duesAmount}</Text><Text style={{ fontSize: 13, color: '#64748B', fontWeight: '700', marginTop: 4 }}>{u.duesMonths} Months</Text></View>
+                 <View key={u.official_id} style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9'}}>
+                   <View style={{flex: 1, paddingRight: 10}}>
+                     <Text style={{ color: '#004085', fontSize: 15, fontWeight: '800' }}>{u.full_name}</Text>
+                     <Text style={{ color: '#64748B', fontSize: 12, marginTop: 4, fontWeight: '600' }}>📞 {u.phone_number}</Text>
+                   </View>
+                   <View style={{alignItems: 'flex-end'}}>
+                     <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }}>Owes <Text style={{ color: '#EF4444', fontSize: 16 }}>₹{u.duesAmount}</Text></Text>
+                     <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700', marginTop: 4 }}>{u.duesMonths} Month(s)</Text>
+                   </View>
                  </View>
                ))}
             </ScrollView>
@@ -2559,7 +2602,7 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
               <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} />
               <View style={{ flexShrink: 1 }}>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIYWA</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text>
+                <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', marginTop: 2 }}>MTK PURAM</Text>
               </View>
             </View>
           </View>
@@ -3365,10 +3408,10 @@ const styles = StyleSheet.create({
   infoBadge: { backgroundColor: '#F8FAFC', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' },
   infoBadgeTxt: { fontSize: 12, fontWeight: '600', color: '#004085' },
   
-  statGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  statBoxLarge: { backgroundColor: '#004085', padding: 20, borderRadius: 16, flex: 1, alignItems: 'center', elevation: 2 },
-  statLargeVal: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
-  statLargeKey: { fontSize: 12, color: '#E2E8F0', textAlign: 'center', marginTop: 6, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' },
+  statBoxLarge: { backgroundColor: '#004085', padding: 16, borderRadius: 16, flex: 1, minWidth: 100, alignItems: 'center', elevation: 2 },
+  statLargeVal: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
+  statLargeKey: { fontSize: 10, color: '#E2E8F0', textAlign: 'center', marginTop: 6, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   statWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   statChip: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, width: '48%', flexDirection: 'column', borderWidth: 1, borderColor: '#E2E8F0' },
   statChipKey: { fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4 },
