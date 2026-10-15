@@ -245,8 +245,8 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
                 )}
                 <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 10, marginRight: 12 }} resizeMode="contain" />
                 <View style={{ flexShrink: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1, letterSpacing: 0.5 }} numberOfLines={1}>HIYWA</Text>
-                  <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2, letterSpacing: 1.5 }}>MTK PURAM</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1, letterSpacing: 0.5 }} numberOfLines={1}>HIDHAYATHUL ISLAM</Text>
+                  <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '800', marginTop: 2, letterSpacing: 1 }}>YOUTH WELFARE ASSOCIATION</Text>
                 </View>
               </View>
 
@@ -650,8 +650,8 @@ function UserProfileScreen({ currentUser, setCurrentUser }) {
 
   const pickImage = () => {
     Alert.alert("Upload Photo", "Choose an option", [
-      { text: "Take Photo", onPress: async () => { let r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 400, height: 400, base64: true }); if (!r.canceled && r.assets[0].base64) { setEditFormData({...editFormData, profile_photo: `data:image/jpeg;base64,${r.assets[0].base64}`}); } } },
-      { text: "Choose from Gallery", onPress: async () => { let r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 400, height: 400, base64: true }); if (!r.canceled && r.assets[0].base64) { setEditFormData({...editFormData, profile_photo: `data:image/jpeg;base64,${r.assets[0].base64}`}); } } },
+      { text: "Take Photo", onPress: async () => { let r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 250, height: 250, base64: true }); if (!r.canceled && r.assets[0].base64) { const b64 = `data:image/jpeg;base64,${r.assets[0].base64}`; if(b64.length > 950000) return alert("Image too large. Please crop it smaller."); setEditFormData({...editFormData, profile_photo: b64}); } } },
+      { text: "Choose from Gallery", onPress: async () => { let r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 250, height: 250, base64: true }); if (!r.canceled && r.assets[0].base64) { const b64 = `data:image/jpeg;base64,${r.assets[0].base64}`; if(b64.length > 950000) return alert("Image too large. Please crop it smaller."); setEditFormData({...editFormData, profile_photo: b64}); } } },
       { text: "Cancel", style: "cancel" }
     ]);
   };
@@ -677,9 +677,10 @@ function UserProfileScreen({ currentUser, setCurrentUser }) {
             </View>
 
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
-              <TouchableOpacity onPress={pickImage}>
+              <TouchableOpacity onPress={pickImage} style={{alignItems: 'center'}}>
                 {editFormData.profile_photo ? <Image source={{uri: editFormData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Photo</Text></View>}
                 <Text style={{color: '#004085', fontWeight: '800', marginTop: 8, textAlign: 'center'}}>Change Photo</Text>
+                <Text style={{fontSize: 10, color: '#64748B', fontWeight: '600', marginTop: 4, letterSpacing: 0.5}}>MAX SIZE 1MB</Text>
               </TouchableOpacity>
             </View>
 
@@ -1270,9 +1271,10 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
   const uploadPhotoForUser = async (officialId) => {
     if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (p.granted === false) return alert("Gallery permission required!"); }
-    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.6, width: 400, height: 400, base64: true });
+    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 250, height: 250, base64: true });
     if (!result.canceled && result.assets[0].base64) {
       const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      if (b64.length > 950000) return alert("Image too large. Please crop it smaller.");
       try { await updateDoc(doc(db, 'members', officialId), { profile_photo: b64 }); alert('Photo uploaded & compressed!'); setSelectedDetailUser({...selectedDetailUser, profile_photo: b64}); fetchData(); } catch (e) { alert('Error saving photo.'); }
     }
   };
@@ -1590,8 +1592,9 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
 
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24 }}>
-      {selectedDetailUser ? renderUserDetail() : (
+    <View style={{ flex: 1, position: 'relative' }}>
+      <ScrollView contentContainerStyle={{ padding: 24 }}>
+        {selectedDetailUser ? renderUserDetail() : (
         <>
           {activeTab === 'STATS' && (
             <View>
@@ -1682,11 +1685,11 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
                 <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Finance Ledger</Text>
                 <View style={{flexDirection: 'row', gap: 12, flexWrap: 'wrap'}}>
-                   <TouchableOpacity style={styles.neatBtnDark} onPress={() => setShowDuesModal(true)}>
-                      <Text style={styles.neatBtnTextDark}>⏳ Pending Dues</Text>
-                   </TouchableOpacity>
                    <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => setExpenseModalVisible(true)}>
                       <Text style={styles.neatBtnText}>+ Log Expense</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity style={styles.neatBtnDark} onPress={() => setShowDuesModal(true)}>
+                      <Text style={styles.neatBtnTextDark}>⏳ Pending Dues</Text>
                    </TouchableOpacity>
                 </View>
               </View>
@@ -1777,15 +1780,15 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                     <FilterDropdown label="Blood Group" value={repBlood} options={BLOOD_GROUPS} onSelect={setRepBlood} />
                     <FilterDropdown label="Gender" value={repGender} options={GENDERS} onSelect={setRepGender} />
                   </View>
-                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
+                  <View style={{flexDirection: 'column', gap: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
                      <View>
                        {(repRole || repStatus || repBlood || repGender) ? (
-                         <Text style={{fontWeight: '500', fontSize: 12, color: '#64748B'}}>Matches: {filteredRepDir.length} Records</Text>
+                         <Text style={{fontWeight: '500', fontSize: 13, color: '#64748B'}}>Matches: {filteredRepDir.length} Records</Text>
                        ) : <View />}
                      </View>
-                     <View style={{flexDirection: 'row', gap: 12}}>
-                       <TouchableOpacity style={styles.neatBtnDark} onPress={() => { setRepRole(''); setRepStatus(''); setRepBlood(''); setRepGender(''); }}><Text style={styles.neatBtnTextDark}>Clear Filters</Text></TouchableOpacity>
-                       <TouchableOpacity style={styles.neatBtnSuccess} onPress={exportDirectory}><Text style={styles.neatBtnText}>📥 Export CSV</Text></TouchableOpacity>
+                     <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, width: '100%'}}>
+                       <TouchableOpacity style={[styles.neatBtnDark, {flex: 1, minWidth: 120}]} onPress={() => { setRepRole(''); setRepStatus(''); setRepBlood(''); setRepGender(''); }}><Text style={styles.neatBtnTextDark}>Clear</Text></TouchableOpacity>
+                       <TouchableOpacity style={[styles.neatBtnSuccess, {flex: 1, minWidth: 120}]} onPress={exportDirectory}><Text style={styles.neatBtnText}>📥 Export CSV</Text></TouchableOpacity>
                      </View>
                   </View>
                 </View>
@@ -1806,17 +1809,17 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                        {Platform.OS === 'web' ? <input type="date" style={{...webDateStyle, marginBottom: 0, height: 42, padding: 8, fontSize: 12}} value={repEndDate} onChange={e => setRepEndDate(e.target.value)} /> : <TextInput style={[styles.input, {marginBottom: 0, height: 42, fontSize: 12}]} placeholder="YYYY-MM-DD" value={repEndDate} onChangeText={setRepEndDate} />}
                      </View>
                    </View>
-                   <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
+                   <View style={{flexDirection: 'column', gap: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 20}}>
                      <View>
                        {(repFinType || repStartDate || repEndDate) ? (
-                         <Text style={{fontWeight: '500', fontSize: 12, color: '#64748B'}}>Matches: {filteredRepFin.length} Transactions</Text>
+                         <Text style={{fontWeight: '500', fontSize: 13, color: '#64748B'}}>Matches: {filteredRepFin.length} Transactions</Text>
                        ) : <View />}
                      </View>
-                     <View style={{flexDirection: 'row', gap: 12}}>
-                       <TouchableOpacity style={styles.neatBtnDark} onPress={() => { setRepFinType(''); setRepStartDate(''); setRepEndDate(''); }}>
-                         <Text style={styles.neatBtnTextDark}>Clear Filters</Text>
+                     <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, width: '100%'}}>
+                       <TouchableOpacity style={[styles.neatBtnDark, {flex: 1, minWidth: 120}]} onPress={() => { setRepFinType(''); setRepStartDate(''); setRepEndDate(''); }}>
+                         <Text style={styles.neatBtnTextDark}>Clear</Text>
                        </TouchableOpacity>
-                       <TouchableOpacity style={styles.neatBtnSuccess} onPress={exportFinance}>
+                       <TouchableOpacity style={[styles.neatBtnSuccess, {flex: 1, minWidth: 120}]} onPress={exportFinance}>
                          <Text style={styles.neatBtnText}>📥 Export CSV</Text>
                        </TouchableOpacity>
                      </View>
@@ -2011,6 +2014,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           )}
         </>
       )}
+      </ScrollView>
 
 
       {/* ALL ADMIN MODALS */}
@@ -2270,7 +2274,7 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
         </View>
       )}
 
-    </ScrollView>
+    </View>
   );
 }
 
@@ -2297,8 +2301,8 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
 
   const pickImage = () => {
     Alert.alert("Upload Photo", "Choose an option", [
-      { text: "Take Photo", onPress: async () => { const p = await ImagePicker.requestCameraPermissionsAsync(); if (!p.granted) return; let r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 300, height: 300, base64: true }); if (!r.canceled && r.assets[0].base64) { setFormData({...formData, profile_photo: `data:image/jpeg;base64,${r.assets[0].base64}`}); } } },
-      { text: "Choose from Gallery", onPress: async () => { let r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 300, height: 300, base64: true }); if (!r.canceled && r.assets[0].base64) { setFormData({...formData, profile_photo: `data:image/jpeg;base64,${r.assets[0].base64}`}); } } },
+      { text: "Take Photo", onPress: async () => { const p = await ImagePicker.requestCameraPermissionsAsync(); if (!p.granted) return; let r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 250, height: 250, base64: true }); if (!r.canceled && r.assets[0].base64) { const b64 = `data:image/jpeg;base64,${r.assets[0].base64}`; if(b64.length > 950000) return alert("Image too large. Please crop it smaller."); setFormData({...formData, profile_photo: b64}); } } },
+      { text: "Choose from Gallery", onPress: async () => { if (Platform.OS !== 'web') { const p = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!p.granted) return; } let r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.1, width: 250, height: 250, base64: true }); if (!r.canceled && r.assets[0].base64) { const b64 = `data:image/jpeg;base64,${r.assets[0].base64}`; if(b64.length > 950000) return alert("Image too large. Please crop it smaller."); setFormData({...formData, profile_photo: b64}); } } },
       { text: "Cancel", style: "cancel" }
     ]);
   };
@@ -2343,8 +2347,11 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
   if (!role) {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085' }}>HIYWA</Text><Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', marginTop: 2 }}>MTK PURAM</Text></View></View></View> )}
-        <View style={styles.contentHeader}><View style={{ flex: 1 }}><Text style={[styles.contentTitle, {fontSize: 16}]}>Select Registration Type</Text></View><TouchableOpacity onPress={onBack} style={styles.neatBtnPrimary}><Text style={styles.neatBtnText}>← Cancel & Back</Text></TouchableOpacity></View>
+        {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIDHAYATHUL ISLAM</Text>
+                <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', marginTop: 2 }}>YOUTH WELFARE ASSOCIATION</Text>
+              </View></View></View> )}
+        <View style={styles.contentHeader}><View style={{ flex: 1 }}><Text style={[styles.contentTitle, {fontSize: 16}]}>Select Registration Type</Text></View><TouchableOpacity onPress={onBack} style={styles.neatBtnPrimary}><Text style={styles.neatBtnText}>← Cancel</Text></TouchableOpacity></View>
         <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1, justifyContent: 'center' }}>
           <View style={{ flexDirection: 'row', gap: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
             <TouchableOpacity style={[styles.bentoBox, { alignItems: 'center', minWidth: 260, flex: 0, paddingVertical: 40 }]} onPress={() => setRole('MEMBER')}><Text style={{ fontSize: 56, marginBottom: 16 }}>🧑‍💼</Text><Text style={[styles.bentoTitle, { fontSize: 24 }]}>HIYWA Member</Text><Text style={[styles.bentoDesc, { textAlign: 'center', marginTop: 8 }]}>Standard member registration.</Text><View style={[styles.button, { width: '100%', marginTop: 32 }]}><Text style={styles.buttonText}>Select Member</Text></View></TouchableOpacity>
@@ -2359,7 +2366,7 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
     <View style={{flex: 1}}>
       <KeyboardAvoidingView style={{flex: 1, backgroundColor: '#F4F7FE'}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {isSubmitting && ( <View style={styles.modalOverlay}><View style={[styles.modalCard, {alignItems: 'center'}]}><ActivityIndicator size="large" color="#004085" style={{ transform: [{ scale: 1.5 }], marginBottom: 24 }} /><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085', marginBottom: 8 }}>Processing...</Text></View></View> )}
-        {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085' }}>HIYWA</Text><Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text></View></View></View> )}
+        {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085' }}>HIDHAYATHUL ISLAM</Text><Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>YOUTH WELFARE ASSOCIATION</Text></View></View></View> )}
         <View style={{flexDirection: 'row', alignItems: 'center', padding: 24, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}><TouchableOpacity style={styles.neatBtnDark} onPress={() => { if (isAdminAuth) onBack(); else { setRole(null); setStep(1); } }}><Text style={styles.neatBtnTextDark}>← Back</Text></TouchableOpacity><Text style={[styles.sectionTitle, {marginBottom: 0}]}>{role === 'STUDENT' ? 'Student Registration' : 'Member Registration'}</Text></View>
 
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 60 }}>
@@ -2367,7 +2374,18 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
             
             <Text style={[styles.sectionTitle, {fontSize: 16, color: '#475569', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8}]}>1. Personal Details</Text>
             <View style={{ zIndex: 110, marginBottom: 24 }}>
-              <View style={{alignItems: 'center', marginBottom: 24, marginTop: 12}}><TouchableOpacity onPress={pickImage} style={{alignItems: 'center'}}>{formData.profile_photo ? <Image source={{uri: formData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Upload</Text></View>}<Text style={{color: '#004085', fontWeight: '800', marginTop: 8}}>Upload Photo</Text></TouchableOpacity>{formData.profile_photo && ( <TouchableOpacity style={{marginTop: 12, backgroundColor: '#FEF2F2', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#FCA5A5'}} onPress={() => setFormData({...formData, profile_photo: null})}><Text style={{color: '#EF4444', fontWeight: 'bold', fontSize: 11}}>🗑️ Remove Photo</Text></TouchableOpacity> )}</View>
+              <View style={{alignItems: 'center', marginBottom: 24, marginTop: 12}}>
+                <TouchableOpacity onPress={pickImage} style={{alignItems: 'center'}}>
+                  {formData.profile_photo ? <Image source={{uri: formData.profile_photo}} style={{width: 100, height: 100, borderRadius: 50}} /> : <View style={{width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center'}}><Text>📷 Upload</Text></View>}
+                  <Text style={{color: '#004085', fontWeight: '800', marginTop: 8}}>Upload Photo</Text>
+                  <Text style={{fontSize: 10, color: '#64748B', fontWeight: '600', marginTop: 4, letterSpacing: 0.5}}>MAX SIZE 1MB</Text>
+                </TouchableOpacity>
+                {formData.profile_photo && (
+                  <TouchableOpacity style={{marginTop: 12, backgroundColor: '#FEF2F2', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#FCA5A5'}} onPress={() => setFormData({...formData, profile_photo: null})}>
+                    <Text style={{color: '#EF4444', fontWeight: 'bold', fontSize: 11}}>🗑️ Remove Photo</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, zIndex: 110 }}>
                 <View style={[wrapStyle, {zIndex: 1}]}><Text style={styles.label}>Full Name *</Text><TextInput style={styles.input} autoCapitalize="characters" placeholder="e.g. muhammad yasir" placeholderTextColor="#94A3B8" value={formData.full_name} onChangeText={(t) => setFormData({...formData, full_name: t})} /></View>
@@ -2531,42 +2549,46 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt }) {
   const [monthsCount, setMonthsCount] = useState('1');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [monthlyRate, setMonthlyRate] = useState(0);
-  const [subStartMonth, setSubStartMonth] = useState(null); // Use null to prevent flickering
+  const [subStartMonth, setSubStartMonth] = useState('');
   const [history, setHistory] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
-  useEffect(() => { 
-    const getRate = async () => { 
-      try { 
-        const sDoc = await getDoc(doc(db, 'settings', 'global')); 
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        const sDoc = await getDoc(doc(db, 'settings', 'global'));
         if(sDoc.exists()) {
            setMonthlyRate(sDoc.data().monthly_subscription_amount || 0);
            setSubStartMonth(sDoc.data().subscription_start_month || '');
-        } else setSubStartMonth('');
-      } catch(e){ setSubStartMonth(''); } 
-    }; 
-    const fetchTxns = async () => { try { const snap = await getDocs(collection(db, 'transactions')); setHistory(snap.docs.map(d=>d.data()).filter(t => t.member_id === currentUser.official_id && t.donation_type === 'SUBSCRIPTION').sort((a,b)=>new Date(b.transaction_date)-new Date(a.transaction_date))); } catch(e){} };
-    getRate(); fetchTxns();
+        }
+        const snap = await getDocs(collection(db, 'transactions'));
+        setHistory(snap.docs.map(d=>d.data()).filter(t => t.member_id === currentUser.official_id && t.donation_type === 'SUBSCRIPTION').sort((a,b)=>new Date(b.transaction_date)-new Date(a.transaction_date)));
+      } catch(e) {} finally { setIsPageLoading(false); }
+    };
+    fetchAllData();
   }, [currentUser]);
 
+  if (isPageLoading) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}><ActivityIndicator size="large" color="#004085" /></View>;
+
   const totalAmount = monthlyRate * (parseInt(monthsCount) || 1);
-  
+
   // DUES CALCULATION
-  const joinDate = currentUser.join_date ? new Date(currentUser.join_date) : new Date(); 
+  const joinDate = currentUser.join_date ? new Date(currentUser.join_date) : new Date();
   let startDate = joinDate;
   if (subStartMonth) { const systemStart = new Date(`${subStartMonth}-01`); if (systemStart > joinDate) startDate = systemStart; }
   const currentDate = new Date();
-  
+
   const rawMonths = ((currentDate.getFullYear() - startDate.getFullYear()) * 12) + (currentDate.getMonth() - startDate.getMonth()) + 1;
-  const monthsSinceJoined = Math.max(0, rawMonths); 
-  const totalPaid = parseInt(currentUser.total_months_paid) || 0; 
+  const monthsSinceJoined = Math.max(0, rawMonths);
+  const totalPaid = parseInt(currentUser.total_months_paid) || 0;
   const duesMonths = Math.max(0, monthsSinceJoined - totalPaid);
   const duesAmount = duesMonths * monthlyRate;
 
   let paidUpToText = "No payments yet";
   if (totalPaid > 0) {
      const paidUpTo = new Date(startDate);
-     paidUpTo.setMonth(paidUpTo.getMonth() + totalPaid - 1); 
+     paidUpTo.setMonth(paidUpTo.getMonth() + totalPaid - 1);
      paidUpToText = paidUpTo.toLocaleDateString('default', { month: 'long', year: 'numeric' });
   }
 
@@ -2596,13 +2618,13 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt }) {
   return (
     <View style={{flex: 1}}>
       <ScrollView contentContainerStyle={{ padding: 24 }}>
-        
+
         {/* DYNAMIC COMING SOON BANNER */}
-        {subStartMonth !== null && isSubsDisabled && (
+        {isSubsDisabled && (
            <View style={{backgroundColor: '#FEF3C7', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#F59E0B', marginBottom: 24, alignItems: 'center'}}>
              <Text style={{color: '#D97706', fontWeight: '900', fontSize: 18, marginBottom: 8}}>⏳ Coming Soon</Text>
              <Text style={{color: '#B45309', fontWeight: '600', fontSize: 13, textAlign: 'center', lineHeight: 20}}>
-               {subStartMonth 
+               {subStartMonth
                  ? `Subscription plan not fully implemented yet. Coming soon in ${new Date(subStartMonth + '-01').toLocaleDateString('default', {month: 'long', year: 'numeric'})}.`
                  : `The automated online subscription tracker is not yet implemented.`}
              </Text>
@@ -2615,7 +2637,7 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt }) {
              <Text style={{color: '#004085', fontSize: 32, fontWeight: '900', marginTop: 4}}>{totalPaid}</Text>
              <Text style={{color: '#3B82F6', fontSize: 13, marginTop: 8, fontWeight: '700'}}>Paid up to: {paidUpToText}</Text>
            </View>
-           
+
            <View style={{flex: 1, minWidth: 200, backgroundColor: duesMonths > 0 ? '#FEF2F2' : '#ECFDF5', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: duesMonths > 0 ? '#FECACA' : '#A7F3D0'}}>
              <Text style={{color: duesMonths > 0 ? '#B91C1C' : '#065F46', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5}}>{duesMonths > 0 ? 'PENDING DUES' : 'ALL CLEAR'}</Text>
              <Text style={{color: duesMonths > 0 ? '#EF4444' : '#10B981', fontSize: 32, fontWeight: '900', marginTop: 4}}>₹{duesAmount}</Text>
@@ -2638,7 +2660,6 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt }) {
         </View>
       </ScrollView>
 
-      {/* NEW MODAL FOR PAYMENTS */}
       {showPaymentModal && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -2651,7 +2672,7 @@ function SubscriptionScreen({ currentUser, setCurrentUser, onViewReceipt }) {
             </View>
             <Text style={styles.label}>Or Custom Months</Text><TextInput style={styles.input} keyboardType="numeric" value={monthsCount} onChangeText={setMonthsCount} />
             <View style={styles.totalBox}><Text style={styles.totalBoxText}>Total: ₹{totalAmount}</Text></View>
-            
+
             <View style={{flexDirection: 'row', gap: 12, marginTop: 12}}>
                <TouchableOpacity style={[styles.button, {flex: 1, backgroundColor: '#64748B'}]} onPress={() => setShowPaymentModal(false)}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity>
                <TouchableOpacity style={[styles.button, {flex: 1}]} onPress={handleUPIPayment} disabled={isSubmitting}>{isSubmitting ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Pay via UPI</Text>}</TouchableOpacity>
