@@ -202,7 +202,6 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
             {currentUser?.role !== 'STUDENT' && <NavButton title="Subscriptions" icon="📅" viewId="subscription" />}
             <NavButton title="Make Donation" icon="💖" viewId="donate" />
             <NavButton title="Fund Drives" icon="📢" viewId="fundraising" />
-            <NavButton title="Governing Body" icon="🏛️" viewId="governing" />
             <NavButton title="Ramadan Comp." icon="🌙" viewId="ramadan" />
             
             {isAdmin && (
@@ -218,7 +217,12 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
                 )}
                 {(hasPerm('MANAGE_FINANCE') || isCore) && <NavButton title="Finance Ledger" icon="💵" viewId="admin_finance" />}
                 {(hasPerm('MANAGE_CAMPAIGNS') || isCore) && <NavButton title="Campaign Control" icon="📢" viewId="admin_campaigns" />}
-                {(hasPerm('MANAGE_USERS') || hasPerm('MANAGE_FINANCE') || isCore) && <NavButton title="Reports Central" icon="📑" viewId="admin_reports" />}
+                {(hasPerm('REPORTS_CENTRAL') || isCore) && <NavButton title="Reports Central" icon="📑" viewId="admin_reports" />}
+                
+                {/* NEW TABS MOVED HERE */}
+                {(hasPerm('MANAGE_USERS') || isCore) && <NavButton title="Admin Actions" icon="⚡" viewId="admin_actions" />}
+                {isCore && <NavButton title="Event Logs" icon="📜" viewId="admin_events" />}
+                
                 {isCore && <NavButton title="System Settings" icon="⚙️" viewId="admin_settings" />}
               </View>
             )}
@@ -245,8 +249,8 @@ function DashboardLayout({ currentUser, currentView, setCurrentView, onLogout, c
                 )}
                 <Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 10, marginRight: 12 }} resizeMode="contain" />
                 <View style={{ flexShrink: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1, letterSpacing: 0.5 }} numberOfLines={1}>HIDHAYATHUL ISLAM</Text>
-                  <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '800', marginTop: 2, letterSpacing: 1 }}>YOUTH WELFARE ASSOCIATION</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1, letterSpacing: 0.5 }} numberOfLines={1}>HIYWA</Text>
+                  <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '800', marginTop: 2, letterSpacing: 1 }}>MTK PURAM</Text>
                 </View>
               </View>
 
@@ -306,38 +310,39 @@ function MainAppContent() {
 
   useEffect(() => {
     const backAction = () => {
-      if (currentView === 'login' || currentView === 'home' || currentView === 'admin_stats') {
+      if (currentView === 'login') { BackHandler.exitApp(); return true; }
+      if (currentView === 'home' || currentView === 'admin_stats') {
         Alert.alert("Exit HIYWA App", "Are you sure you want to exit?", [
-          { text: "Cancel", style: "cancel" }, 
-          { text: "YES, EXIT", style: "destructive", onPress: () => BackHandler.exitApp() }
-        ]);
-        return true; 
+          { text: "Cancel", style: "cancel" }, { text: "YES, EXIT", style: "destructive", onPress: () => BackHandler.exitApp() }
+        ]); return true; 
       }
-      
-      // Step-back logic
       if (currentView === 'register') { setCurrentView('login'); return true; }
       if (currentView === 'campaignDetail') { setCurrentView('fundraising'); return true; }
       if (currentView === 'receipt') { setCurrentView(receiptBackView); return true; }
-      
-      // If anywhere else (Profile, Finance, Users, etc.), go back to Home!
-      setCurrentView('home'); 
-      return true; 
+      setCurrentView('home'); return true; 
     };
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
     if (Platform.OS === 'web') {
       const handleWebBack = (e) => {
-        e.preventDefault();
-        Alert.alert("Exit Portal", "Are you sure you want to exit the HIYWA portal? You will be logged out.", [
-           { text: "Cancel", style: "cancel", onPress: () => window.history.pushState(null, '', window.location.href) },
-           { text: "Exit", style: "destructive", onPress: () => { setCurrentUser(null); setCurrentView('login'); } }
-        ]);
+        if (currentView === 'login') return; 
+        
+        if (currentView === 'home' || currentView === 'admin_stats') {
+           window.history.pushState(null, '', window.location.href);
+           Alert.alert("Exit Portal", "Are you sure you want to exit the HIYWA portal? You will be logged out.", [
+             { text: "Cancel", style: "cancel" }, { text: "Log Out", style: "destructive", onPress: () => { setCurrentUser(null); setCurrentView('login'); } }
+           ]); return;
+        }
+        
+        if (currentView === 'register') setCurrentView('login');
+        else if (currentView === 'campaignDetail') setCurrentView('fundraising');
+        else if (currentView === 'receipt') setCurrentView(receiptBackView);
+        else setCurrentView('home');
       };
-      window.history.pushState(null, '', window.location.href);
+      
       window.addEventListener('popstate', handleWebBack);
       return () => { backHandler.remove(); window.removeEventListener('popstate', handleWebBack); };
     }
-
     return () => backHandler.remove();
   }, [currentView, currentUser, receiptBackView]);
 
@@ -478,6 +483,7 @@ function LoginScreen({ onNavigate, onLogin }) {
       if (userSnap.exists()) {
         const userData = userSnap.data();
         if (userData.password === password) {
+          if (userData.membership_status === 'INACTIVE' || userData.membership_status === 'DECEASED') return alert('Login Failed: Your account is deactivated. Contact Admin.');
           if (password === 'Hiywa@123') { setForcePassUser(userData); setShowResetAlert(true); } else { onLogin(userData); }
         } else alert('Login Failed: Incorrect Password');
       } else alert('Login Failed: Official ID not found');
@@ -538,31 +544,20 @@ function HomeScreen({ currentUser, onNavigate }) {
   const [subStartMonth, setSubStartMonth] = useState('');
   const [customSlider, setCustomSlider] = useState([]);
   const [currentImage, setCurrentImage] = useState(0);
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const { width } = useWindowDimensions();
 
-  const fallbackImages = [
-    'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1564121211835-e88c852648ab?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1519817650390-64a93db51149?auto=format&fit=crop&q=80&w=1200'
-  ];
-
+  const fallbackImages = ['https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&q=80&w=1200'];
   const activeSlider = customSlider.length > 0 ? customSlider : fallbackImages;
 
-  // Splash Screen Animation States
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Entrance Animation, Hold, then Disappear
     Animated.sequence([
-      Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 20, useNativeDriver: true }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
-      ]),
-      Animated.delay(4000), // Hold for 4 seconds
-      Animated.timing(opacityAnim, { toValue: 0, duration: 1500, useNativeDriver: true }) // Fade out
+      Animated.parallel([ Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 20, useNativeDriver: true }), Animated.timing(opacityAnim, { toValue: 1, duration: 1500, useNativeDriver: true }) ]),
+      Animated.delay(4000), Animated.timing(opacityAnim, { toValue: 0, duration: 1500, useNativeDriver: true }) 
     ]).start();
-    
     const timer = setInterval(() => setCurrentImage(prev => prev + 1), 4000);
     return () => clearInterval(timer);
   }, []);
@@ -577,10 +572,12 @@ function HomeScreen({ currentUser, onNavigate }) {
         }
         const campSnap = await getDocs(collection(db, 'campaigns')); 
         setActiveCampaigns(campSnap.docs.map(d=>d.data()).filter(c => c.status === 'ACTIVE' && (parseFloat(c.raised_amount)||0) < (parseFloat(c.target_amount)||1)));
-      } catch (err) {} 
+      } catch (err) {} finally { setIsPageLoading(false); }
     };
     fetchData();
   }, []);
+
+  if (isPageLoading) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}><ActivityIndicator size="large" color="#004085" /></View>;
 
   let duesMonths = 0;
   if (currentUser?.role !== 'STUDENT') {
@@ -589,14 +586,11 @@ function HomeScreen({ currentUser, onNavigate }) {
     if (subStartMonth) { const systemStart = new Date(`${subStartMonth}-01`); if (systemStart > joinDate) startDate = systemStart; }
     const currentDate = new Date();
     const rawMonths = ((currentDate.getFullYear() - startDate.getFullYear()) * 12) + (currentDate.getMonth() - startDate.getMonth()) + 1;
-    const monthsSince = Math.max(0, rawMonths);
-    const totalPaid = parseInt(currentUser?.total_months_paid) || 0;
-    duesMonths = Math.max(0, monthsSince - totalPaid);
+    duesMonths = Math.max(0, Math.max(0, rawMonths) - (parseInt(currentUser?.total_months_paid) || 0));
   }
 
   return (
     <ScrollView contentContainerStyle={{ padding: 24 }}>
-      {/* PHOTO SLIDER WITH SPLASH ANIMATION */}
       <View style={{ width: '100%', height: width < 768 ? (width - 48) : 450, backgroundColor: '#001a38', borderRadius: 20, overflow: 'hidden', marginBottom: 24, position: 'relative', elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 }}>
         <Image source={{ uri: activeSlider[currentImage % activeSlider.length] }} style={{ width: '100%', height: '100%', opacity: 0.6 }} resizeMode="cover" />
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
@@ -607,7 +601,6 @@ function HomeScreen({ currentUser, onNavigate }) {
         </View>
       </View>
 
-      {/* ALERTS */}
       {duesMonths > 0 && (
         <TouchableOpacity style={[styles.alertRedBox, {borderColor: '#FCA5A5', backgroundColor: '#FEF2F2'}]} onPress={() => onNavigate('subscription')}>
           <Text style={[styles.alertRedText, {color: '#B91C1C'}]}>⚠️ ACTION REQUIRED: You have {duesMonths} month(s) of pending subscription dues. Tap here to clear.</Text>
@@ -620,7 +613,9 @@ function HomeScreen({ currentUser, onNavigate }) {
         </TouchableOpacity>
       ))}
 
-      {/* QUICK ACTIONS BENTO GRID */}
+      <Text style={[styles.sectionTitle, { marginTop: 12, textAlign: 'center' }]}>Trust Governing Body</Text>
+      <View style={{marginBottom: 32}}><GoverningBodyWidget isEditing={false} /></View>
+
       <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Quick Actions</Text>
       <View style={styles.bentoGrid}>
         {currentUser?.role !== 'STUDENT' && (
@@ -817,17 +812,11 @@ const openUPI = async (amount, reason) => {
     } catch (e) { return false; }
 };
 
-// --- GOVERNING BODY SCREEN (FLOWCHART) ---
-function GoverningBodyScreen({ currentUser }) {
+// --- GOVERNING BODY WIDGET ---
+function GoverningBodyWidget({ isEditing = false }) {
   const [govBody, setGovBody] = useState({});
   const [members, setMembers] = useState([]);
-  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [detailUser, setDetailUser] = useState(null); 
-
-  // RESTRICT EDITS TO CORE ADMIN ONLY
-  const isCore = currentUser?.is_core_admin;
-  const isAdmin = isCore; 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -841,7 +830,7 @@ function GoverningBodyScreen({ currentUser }) {
     fetchData();
   }, []);
 
-  const saveGovBody = async () => { try { await setDoc(doc(db, 'settings', 'governing_body'), govBody); alert('Updated!'); setIsEditing(false); } catch(e) {} };
+  const saveGovBody = async () => { try { await setDoc(doc(db, 'settings', 'governing_body'), govBody); alert('Governing Body Updated!'); } catch(e) {} };
 
   const renderGovCard = (roleKey, title) => {
     const id = govBody[roleKey];
@@ -851,23 +840,21 @@ function GoverningBodyScreen({ currentUser }) {
     const availableMembers = members.filter(m => !allAssigned.includes(m.official_id) || m.official_id === id);
 
     return (
-       <TouchableOpacity key={roleKey} activeOpacity={isEditing ? 1 : 0.5} onPress={() => { if(!isEditing && u) setDetailUser({...u, trustRole: title}); }} style={{alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', width: 140, boxShadow: '0 4px 10px rgba(0,0,0,0.05)', position: 'relative', margin: 8}}>
+       <View key={roleKey} style={{alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', width: 140, boxShadow: '0 4px 10px rgba(0,0,0,0.05)', position: 'relative', margin: 8}}>
          {isEditing && (
-           <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 16, justifyContent: 'center', alignItems: 'center'}}>
+           <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 16, justifyContent: 'center', alignItems: 'center'}}>
              {Platform.OS === 'web' ? (
                <select style={{width: '90%', padding: 4, fontSize: 11}} value={id || ''} onChange={(e) => setGovBody({...govBody, [roleKey]: e.target.value})}>
                   <option value="">-- Vacant --</option>
                   {availableMembers.map(m => <option key={m.official_id} value={m.official_id}>{m.full_name}</option>)}
                </select>
-             ) : (
-               <TextInput placeholder="ID..." style={{backgroundColor: 'white', padding: 4, width: '90%', fontSize: 11, borderWidth: 1}} autoCapitalize="characters" value={id || ''} onChangeText={(t) => setGovBody({...govBody, [roleKey]: t.toUpperCase()})} />
-             )}
+             ) : <TextInput placeholder="ID..." style={{backgroundColor: 'white', padding: 4, width: '90%', fontSize: 11, borderWidth: 1}} autoCapitalize="characters" value={id || ''} onChangeText={(t) => setGovBody({...govBody, [roleKey]: t.toUpperCase()})} />}
            </View>
          )}
          {u?.profile_photo ? <Image source={{uri: u.profile_photo}} style={{width: 60, height: 60, borderRadius: 30, marginBottom: 8}} /> : <View style={{width: 60, height: 60, borderRadius: 30, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 8}}><Text>👤</Text></View>}
          <Text style={{fontWeight: '900', color: '#004085', fontSize: 12, textAlign: 'center'}} numberOfLines={2}>{u ? u.full_name : 'VACANT'}</Text>
          <Text style={{fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 4, textAlign: 'center'}}>{title}</Text>
-       </TouchableOpacity>
+       </View>
     );
   };
 
@@ -895,11 +882,11 @@ function GoverningBodyScreen({ currentUser }) {
             {list.length === 0 ? <Text style={{color: '#94A3B8'}}>None assigned.</Text> : list.map(id => {
                const u = members.find(m => m.official_id === id);
                return (
-                 <TouchableOpacity key={id} activeOpacity={isEditing ? 1 : 0.5} onPress={() => { if(!isEditing && u) setDetailUser({...u, trustRole: title}); }} style={{alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5E1', width: 110, position: 'relative'}}>
+                 <View key={id} style={{alignItems: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5E1', width: 110, position: 'relative'}}>
                    {isEditing && <TouchableOpacity style={{position: 'absolute', top: -5, right: -5, backgroundColor: '#EF4444', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center', zIndex: 20}} onPress={() => setGovBody({...govBody, [roleKey]: list.filter(i => i !== id)})}><Text style={{color: 'white', fontSize: 10, fontWeight: '900'}}>✕</Text></TouchableOpacity>}
                    {u?.profile_photo ? <Image source={{uri: u.profile_photo}} style={{width: 40, height: 40, borderRadius: 20, marginBottom: 6}} /> : <View style={{width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 6}}><Text style={{fontSize: 16}}>👤</Text></View>}
                    <Text style={{color: '#1E3A8A', fontWeight: '700', fontSize: 10, textAlign: 'center'}} numberOfLines={2}>{u ? u.full_name : id}</Text>
-                 </TouchableOpacity>
+                 </View>
                );
             })}
          </View>
@@ -907,66 +894,35 @@ function GoverningBodyScreen({ currentUser }) {
     );
   };
 
-  if (loading) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}><ActivityIndicator size="large" color="#004085" /></View>;
+  if (loading) return <ActivityIndicator size="large" color="#004085" />;
 
   return (
-    <>
-    <ScrollView contentContainerStyle={{ padding: 24, alignItems: 'center' }}>
-      <View style={[styles.formCard, {width: '100%'}]}>
+    <View style={[{width: '100%'}, isEditing && styles.formCard]}>
+      {isEditing && (
         <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32}}>
-          <Text style={[styles.sectionTitle, {marginBottom: 0, fontSize: 16}]}>Trust Governing Body</Text>
-          {isAdmin && !isEditing && <TouchableOpacity style={styles.neatBtnPrimary} onPress={()=>setIsEditing(true)}><Text style={styles.neatBtnText}>✏️ Edit Roles</Text></TouchableOpacity>}
-          {isAdmin && isEditing && <View style={{flexDirection: 'row', gap: 10}}><TouchableOpacity style={styles.neatBtnDark} onPress={()=>setIsEditing(false)}><Text style={styles.neatBtnTextDark}>Cancel</Text></TouchableOpacity><TouchableOpacity style={styles.neatBtnSuccess} onPress={saveGovBody}><Text style={styles.neatBtnText}>💾 Save</Text></TouchableOpacity></View>}
+          <Text style={[styles.sectionTitle, {marginBottom: 0, fontSize: 16}]}>Edit Trust Governing Body</Text> 
+          <TouchableOpacity style={styles.neatBtnSuccess} onPress={saveGovBody}><Text style={styles.neatBtnText}>💾 Save Roles</Text></TouchableOpacity>
         </View>
-
-        <View style={{alignItems: 'center', width: '100%'}}>
-          {renderGovCard('President', 'President')}
-          <View style={{width: 2, height: 20, backgroundColor: '#CBD5E1'}} />
-          <View style={{flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap'}}>
-            {renderGovCard('Vice_President', 'Vice President')}
-            {renderGovCard('Secretary', 'Secretary')}
-            {renderGovCard('Treasurer', 'Treasurer')}
-          </View>
-          <View style={{width: 2, height: 20, backgroundColor: '#CBD5E1'}} />
-          <View style={{flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginBottom: 32}}>
-            {renderGovCard('Joint_Secretary', 'Joint Secretary')}
-            {renderGovCard('Joint_Treasurer', 'Joint Treasurer')}
-          </View>
-          <View style={{width: '100%', borderTopWidth: 2, borderTopColor: '#E2E8F0', paddingTop: 32, alignItems: 'center'}}>
-            {renderMultiPosition('Executive_Members', 'Executive Members')}
-            {renderMultiPosition('Special_Members', 'Special Members')}
-          </View>
+      )}
+      <View style={{alignItems: 'center', width: '100%'}}>
+        {renderGovCard('President', 'President')}
+        <View style={{width: 2, height: 20, backgroundColor: '#CBD5E1'}} />
+        <View style={{flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap'}}>
+          {renderGovCard('Vice_President', 'Vice President')}
+          {renderGovCard('Secretary', 'Secretary')}
+          {renderGovCard('Treasurer', 'Treasurer')}
+        </View>
+        <View style={{width: 2, height: 20, backgroundColor: '#CBD5E1'}} />
+        <View style={{flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginBottom: 32}}>
+          {renderGovCard('Joint_Secretary', 'Joint Secretary')}
+          {renderGovCard('Joint_Treasurer', 'Joint Treasurer')}
+        </View>
+        <View style={{width: '100%', borderTopWidth: 2, borderTopColor: '#E2E8F0', paddingTop: 32, alignItems: 'center'}}>
+          {renderMultiPosition('Executive_Members', 'Executive Members')}
+          {renderMultiPosition('Special_Members', 'Special Members')}
         </View>
       </View>
-    </ScrollView>
-
-    {/* MINIMAL DETAILS POPUP MODAL */}
-    {detailUser && (
-      <View style={[styles.modalOverlay, {position: Platform.OS === 'web' ? 'fixed' : 'absolute'}]}>
-        <View style={[styles.modalCard, {maxWidth: 320, width: '90%', alignItems: 'center'}]}>
-           {detailUser.profile_photo ? (
-              <Image source={{uri: detailUser.profile_photo}} style={{width: 80, height: 80, borderRadius: 40, marginBottom: 12, borderWidth: 2, borderColor: '#004085'}} />
-           ) : (
-              <View style={{width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 2, borderColor: '#004085'}}><Text style={{fontSize: 32}}>👤</Text></View>
-           )}
-           <Text style={{fontWeight: '900', color: '#004085', fontSize: 18, textAlign: 'center', marginBottom: 4}}>{detailUser.full_name}</Text>
-           <Text style={{color: '#64748B', fontWeight: '800', fontSize: 11, marginBottom: 8}}>{detailUser.official_id} • {detailUser.membership_status}</Text>
-           <View style={{backgroundColor: '#E0F2FE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 20}}><Text style={{color: '#0284C7', fontWeight: '900', fontSize: 12, textTransform: 'uppercase'}}>{detailUser.trustRole}</Text></View>
-
-           <View style={{width: '100%', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', gap: 10, marginBottom: 24}}>
-              <Text style={{fontSize: 13, color: '#1E293B'}}><Text style={{fontWeight: '800', color: '#64748B'}}>📞 Phone:</Text> {detailUser.phone_number}</Text>
-              <Text style={{fontSize: 13, color: '#1E293B'}}><Text style={{fontWeight: '800', color: '#64748B'}}>🩸 Blood:</Text> {detailUser.blood_group || 'N/A'}</Text>
-              <Text style={{fontSize: 13, color: '#1E293B'}}><Text style={{fontWeight: '800', color: '#64748B'}}>📍 Native:</Text> {detailUser.native_place || 'N/A'}</Text>
-              <Text style={{fontSize: 13, color: '#1E293B'}}><Text style={{fontWeight: '800', color: '#64748B'}}>🏢 Location:</Text> {detailUser.current_location || 'N/A'}</Text>
-           </View>
-
-           <TouchableOpacity style={[styles.button, {backgroundColor: '#004085', width: '100%', marginTop: 0}]} onPress={() => setDetailUser(null)}>
-             <Text style={styles.buttonText}>Close</Text>
-           </TouchableOpacity>
-        </View>
-      </View>
-    )}
-    </>
+    </View>
   );
 }
 
@@ -979,14 +935,18 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [directory, setDirectory] = useState([]);
   const [globalTxns, setGlobalTxns] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [systemLogs, setSystemLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Helper to log all Administrative actions automatically
+  const logAdminEvent = async (action, details) => {
+    try { await setDoc(doc(db, 'system_logs', `LOG_${Date.now()}`), { timestamp: new Date().toISOString(), admin_name: currentUser.full_name, action, details }); } catch(e){}
+  };
 
   const [masterResetModal, setMasterResetModal] = useState(false);
   const [masterResetPassword, setMasterResetPassword] = useState('');
 
-
-  // --- NEW SETTINGS STATE ---
   const [subAmount, setSubAmount] = useState('100');
   const [primaryUpi, setPrimaryUpi] = useState('');
   const [secondaryUpi, setSecondaryUpi] = useState('');
@@ -997,34 +957,27 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [sliderImages, setSliderImages] = useState([]);
   const [showSliderModal, setShowSliderModal] = useState(false);
 
-
-  // --- NEW EXPENSE STATE ---
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseReason, setExpenseReason] = useState('');
-
-
-  // --- NEW SETTINGS ACTIONS STATE ---
   const [configModal, setConfigModal] = useState(null);
 
-
-  // States for Modals and Filters
   const [selectedDetailUser, setSelectedDetailUser] = useState(null);
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [editFormData, setEditFormData] = useState({});
-  const [showIdCardModal, setShowIdCardModal] = useState(false);
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [cashModalVisible, setCashModalVisible] = useState(false);
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
-  
   const [viewCampDonors, setViewCampDonors] = useState(null);
 
+  // New Guest Cash States
+  const [guestModalVisible, setGuestModalVisible] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({ blood: '', edu: '', gender: '', native: '', marital: '', status: '', islamic: '' });
-
-
   const [finSearchQuery, setFinSearchQuery] = useState('');
   const [showDuesModal, setShowDuesModal] = useState(false);
   const [ledgerTab, setLedgerTab] = useState('INCOME');
@@ -1037,79 +990,14 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
   const [repStartDate, setRepStartDate] = useState('');
   const [repEndDate, setRepEndDate] = useState('');
 
-  const filteredRepDir = directory.filter(u => {
-     if (repRole && u.role !== repRole) return false;
-     if (repStatus && u.membership_status !== repStatus) return false;
-     if (repBlood && u.blood_group !== repBlood) return false;
-     if (repGender && u.gender !== repGender) return false;
-     return true;
-  });
-
-  const filteredRepFin = globalTxns.filter(t => {
-     if (repFinType && t.donation_type !== repFinType) return false;
-     if (repStartDate && new Date(t.transaction_date).getTime() < new Date(repStartDate).getTime()) return false;
-     if (repEndDate && new Date(t.transaction_date).getTime() > new Date(repEndDate).getTime() + 86400000) return false;
-     return true;
-  });
-
-  const exportDirectory = () => {
-     const header = "ID,Name,Role,Status,Phone,Age,Blood Group,Native Place,Education,Occupation,Address\n";
-     const rows = filteredRepDir.map(u => {
-        const uAge = u.dob ? (new Date().getFullYear() - new Date(u.dob).getFullYear()) : 'N/A';
-        return `"${u.official_id}","${u.full_name}","${u.role}","${u.membership_status}","${u.phone_number}","${uAge}","${u.blood_group || ''}","${u.native_place || ''}","${u.educational_qualification || ''}","${u.occupation || ''}","${(u.address || '').replace(/"/g, '""')}"`;
-     }).join("\n");
-     downloadCSV(header + rows, "HIYWA_Directory_Report.csv");
-  };
-
-  const exportFinance = () => {
-     const header = "Date & Time,Txn ID,Member ID,Member Name,Type,Amount,Method,Reason\n";
-     const rows = filteredRepFin.map(t => {
-        return `"${new Date(t.transaction_date).toLocaleString('default', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}","${t.transaction_id}","${t.member_id}","${t.full_name}","${t.donation_type}","${t.amount}","${t.payment_method}","${(t.reason || '').replace(/"/g, '""')}"`;
-     }).join("\n");
-     downloadCSV(header + rows, "HIYWA_Finance_Report.csv");
-  };
-
-
-  // Dropdown States for Editing
-  const [editParentsDrop, setEditParentsDrop] = useState(false);
-  const [editGenderDrop, setEditGenderDrop] = useState(false);
-  const [editBloodDrop, setEditBloodDrop] = useState(false);
-  const [editMaritalDrop, setEditMaritalDrop] = useState(false);
-  const [editNativeDrop, setEditNativeDrop] = useState(false);
-  const [editEduDrop, setEditEduDrop] = useState(false);
-  const [editClassDrop, setEditClassDrop] = useState(false);
-  const [editSchoolTypeDrop, setEditSchoolTypeDrop] = useState(false);
-  const [editMediumDrop, setEditMediumDrop] = useState(false);
-  const [editIslamicDrop, setEditIslamicDrop] = useState(false);
-
-
-  // Cash Modal State
-  const [cashUser, setCashUser] = useState(null);
-  const [cashType, setCashType] = useState('SUBSCRIPTION'); 
-  const [cashAmount, setCashAmount] = useState('');
-  const [cashReason, setCashReason] = useState('');
-  const [cashMonths, setCashMonths] = useState('1');
-  const [cashCampId, setCashCampId] = useState('');
-  
-  // Campaign Create State
-  const [campTitle, setCampTitle] = useState('');
-  const [campDesc, setCampDesc] = useState('');
-  const [campTarget, setCampTarget] = useState('');
-  const [campStatus, setCampStatus] = useState('ACTIVE');
-  
-  // Promote State
-  const [promoteUserId, setPromoteUserId] = useState(null);
-  const [selectedPerms, setSelectedPerms] = useState({ MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
-
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (hasPerm('MANAGE_USERS') || isCore) {
+      if (hasPerm('MANAGE_USERS') || isCore || activeTab === 'ACTIONS' || activeTab === 'REPORTS') {
         const membersSnap = await getDocs(collection(db, 'members'));
         setDirectory(membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
-      if (hasPerm('MANAGE_FINANCE') || isCore || activeTab === 'SETTINGS' || activeTab === 'EXPENSE') {
+      if (hasPerm('MANAGE_FINANCE') || isCore || activeTab === 'SETTINGS' || activeTab === 'EVENTS' || activeTab === 'REPORTS') {
         const txnsSnap = await getDocs(collection(db, 'transactions'));
         setGlobalTxns(txnsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         
@@ -1120,118 +1008,68 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
            setPrimaryUpi(d.primary_upi || '');
            setSecondaryUpi(d.secondary_upi || '');
            setInitialAmount(d.initial_amount || '0');
-           setAllowPublicReg(d.allow_public_registration || false); // <-- CORRECT PLACEMENT
-            setSubStartMonth(d.subscription_start_month || '');
+           setAllowPublicReg(d.allow_public_registration || false); 
+           setSubStartMonth(d.subscription_start_month || '');
            setSliderImages(d.slider_images || []);
         }
       }
-      if (hasPerm('MANAGE_CAMPAIGNS') || isCore) {
+      if (hasPerm('MANAGE_CAMPAIGNS') || isCore || activeTab === 'ACTIONS') {
         const campSnap = await getDocs(collection(db, 'campaigns'));
         setCampaigns(campSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+      if (activeTab === 'EVENTS') {
+        const logsSnap = await getDocs(collection(db, 'system_logs'));
+        setSystemLogs(logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
+    } catch (e) {} finally { setLoading(false); }
   };
 
+  useEffect(() => { setSelectedDetailUser(null); fetchData(); }, [activeTab]);
 
-  useEffect(() => { 
-    setSelectedDetailUser(null);
-    fetchData(); 
-  }, [activeTab]);
-
-
-  // Calculations (Excluding Core Admin)
   const stats = { roles: {}, bloodGroups: {}, marital: {}, education: {}, native: {}, gender: {} };
   const incrementStat = (cat, val, role) => { if (!val) return; if (!stats[cat][val]) stats[cat][val] = { total: 0, M: 0, S: 0 }; stats[cat][val].total += 1; if (role === 'STUDENT') stats[cat][val].S += 1; else stats[cat][val].M += 1; };
-  
-  directory.forEach(u => { 
-    stats.roles[u.role] = (stats.roles[u.role] || 0) + 1; 
-    incrementStat('bloodGroups', u.blood_group, u.role); 
-    incrementStat('marital', u.marital_status, u.role); 
-    incrementStat('education', u.educational_qualification, u.role); 
-    incrementStat('native', u.native_place, u.role); 
-    incrementStat('gender', u.gender, u.role); 
-  });
-
+  directory.forEach(u => { stats.roles[u.role] = (stats.roles[u.role] || 0) + 1; incrementStat('bloodGroups', u.blood_group, u.role); incrementStat('marital', u.marital_status, u.role); incrementStat('education', u.educational_qualification, u.role); incrementStat('native', u.native_place, u.role); incrementStat('gender', u.gender, u.role); });
 
   const renderBarChart = (statObj, barColor) => {
     const entries = Object.entries(statObj).sort((a, b) => b[1].total - a[1].total);
     if (entries.length === 0) return <Text style={{ color: '#64748B', fontSize: 13 }}>No data available.</Text>;
-    
-    // Find the highest number to scale the graph bars correctly
     const maxVal = Math.max(...entries.map(e => e[1].total));
-    
-    return (
-      <View style={{ width: '100%', marginTop: 8 }}>
-        {entries.map(([key, val]) => {
-          const fillWidth = Math.max((val.total / maxVal) * 100, 2); // Min 2% so empty bars still show slightly
-          return (
-            <View key={key} style={{ marginBottom: 16 }}>
-               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E293B', flex: 1, paddingRight: 10 }} numberOfLines={1}>{key}</Text>
-                 <Text style={{ fontSize: 14, fontWeight: '800', color: '#004085' }}>{val.total}</Text>
-               </View>
-               <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
-                 <View style={{ height: '100%', width: `${fillWidth}%`, backgroundColor: barColor || '#3B82F6', borderRadius: 4 }} />
-               </View>
-               <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6, fontWeight: '500' }}>Members: {val.M}   •   Students: {val.S}</Text>
-            </View>
-          );
-        })}
-      </View>
-    );
+    return ( <View style={{ width: '100%', marginTop: 8 }}>{entries.map(([key, val]) => { const fillWidth = Math.max((val.total / maxVal) * 100, 2); return ( <View key={key} style={{ marginBottom: 16 }}> <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}> <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E293B', flex: 1, paddingRight: 10 }} numberOfLines={1}>{key}</Text> <Text style={{ fontSize: 14, fontWeight: '800', color: '#004085' }}>{val.total}</Text> </View> <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}> <View style={{ height: '100%', width: `${fillWidth}%`, backgroundColor: barColor || '#3B82F6', borderRadius: 4 }} /> </View> <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6, fontWeight: '500' }}>Members: {val.M} • Students: {val.S}</Text> </View> ); })}</View> );
   };
 
-
-  const filteredDirectory = directory
-  .filter(u => activeTab === 'STUDENTS' ? u.role === 'STUDENT' : (u.role === 'MEMBER' || u.role === 'ADMIN'))
-  .filter(u => !searchQuery || u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(searchQuery.toLowerCase()))
-  .filter(u => !filters.status || u.membership_status === filters.status).filter(u => !filters.blood || u.blood_group === filters.blood).filter(u => !filters.gender || u.gender === filters.gender).filter(u => !filters.edu || u.educational_qualification === filters.edu).filter(u => !filters.islamic || u.islamic_qualification === filters.islamic).filter(u => !filters.native || u.native_place === filters.native).filter(u => !filters.marital || u.marital_status === filters.marital);
-
+  const filteredDirectory = directory.filter(u => activeTab === 'STUDENTS' ? u.role === 'STUDENT' : (u.role === 'MEMBER' || u.role === 'ADMIN')).filter(u => !searchQuery || u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(searchQuery.toLowerCase())).filter(u => !filters.status || u.membership_status === filters.status).filter(u => !filters.blood || u.blood_group === filters.blood).filter(u => !filters.gender || u.gender === filters.gender).filter(u => !filters.edu || u.educational_qualification === filters.edu).filter(u => !filters.islamic || u.islamic_qualification === filters.islamic).filter(u => !filters.native || u.native_place === filters.native).filter(u => !filters.marital || u.marital_status === filters.marital);
   const allIncomes = globalTxns.filter(t => t.donation_type !== 'EXPENSE');
   const allExpenses = globalTxns.filter(t => t.donation_type === 'EXPENSE');
-
-
   const searchQ = finSearchQuery.toLowerCase();
-  const searchFilter = (t) => {
-    if (!finSearchQuery) return true;
-    const strTxnId = t.transaction_id ? String(t.transaction_id) : '';
-    return t.full_name?.toLowerCase().includes(searchQ) || strTxnId.toLowerCase().includes(searchQ) || t.reason?.toLowerCase().includes(searchQ);
-  };
+  const searchFilter = (t) => { if (!finSearchQuery) return true; const strTxnId = t.transaction_id ? String(t.transaction_id) : ''; return t.full_name?.toLowerCase().includes(searchQ) || strTxnId.toLowerCase().includes(searchQ) || t.reason?.toLowerCase().includes(searchQ); };
   const filteredIncomes = allIncomes.filter(searchFilter).sort((a,b)=> new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
   const filteredExpensesList = allExpenses.filter(searchFilter).sort((a,b)=> new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
 
+  const pendingDuesList = directory.filter(u => !u.is_core_admin && (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE').map(u => { const joinDate = u.join_date ? new Date(u.join_date) : new Date(); let startDate = joinDate; if (subStartMonth) { const systemStart = new Date(`${subStartMonth}-01`); if (systemStart > joinDate) startDate = systemStart; } const rawMonths = ((new Date().getFullYear() - startDate.getFullYear()) * 12) + (new Date().getMonth() - startDate.getMonth()) + 1; const dues = Math.max(0, Math.max(0, rawMonths) - (parseInt(u.total_months_paid) || 0)); return { ...u, duesMonths: dues, duesAmount: dues * Number(subAmount || 0) }; }).filter(u => u.duesMonths > 0).sort((a,b) => b.duesMonths - a.duesMonths);
 
-  const pendingDuesList = directory.filter(u => !u.is_core_admin && (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE').map(u => {
-    const joinDate = u.join_date ? new Date(u.join_date) : new Date(); 
-    let startDate = joinDate;
-    if (subStartMonth) { const systemStart = new Date(`${subStartMonth}-01`); if (systemStart > joinDate) startDate = systemStart; }
-    const currentDate = new Date();
-    
-    const rawMonths = ((currentDate.getFullYear() - startDate.getFullYear()) * 12) + (currentDate.getMonth() - startDate.getMonth()) + 1;
-    const monthsSinceJoined = Math.max(0, rawMonths); 
-    const totalPaid = parseInt(u.total_months_paid) || 0; 
-    const dues = Math.max(0, monthsSinceJoined - totalPaid);
-    return { ...u, duesMonths: dues, duesAmount: dues * Number(subAmount || 0) };
-  }).filter(u => u.duesMonths > 0).sort((a,b) => b.duesMonths - a.duesMonths);
-
-
-  const totalFinSubs = allIncomes.filter(t=>t.donation_type==='SUBSCRIPTION').reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalFinGen = allIncomes.filter(t=>t.donation_type==='GENERAL').reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalFinCamp = allIncomes.filter(t=>t.donation_type==='FUND_RAISING' || t.donation_type==='CAMPAIGN').reduce((sum, t) => sum + Number(t.amount), 0);
-  
   const totalIncomeVal = allIncomes.reduce((sum, t) => sum + Number(t.amount), 0);
   const totalExpenseVal = allExpenses.reduce((sum, t) => sum + Number(t.amount), 0);
   const currentBalance = Number(initialAmount) + totalIncomeVal - totalExpenseVal;
-
 
   const submitExpenseLog = async () => {
     if (!expenseAmount || isNaN(expenseAmount) || Number(expenseAmount) <= 0 || !expenseReason) return alert('Enter valid amount and reason.');
     const txnId = `EXP_${Date.now()}`;
     const payload = { transaction_date: new Date().toISOString(), transaction_id: txnId, member_id: currentUser.official_id, full_name: currentUser.full_name, amount: expenseAmount, payment_method: 'CASH/BANK', donation_type: 'EXPENSE', reason: expenseReason.toUpperCase() };
+    try { await setDoc(doc(db, 'transactions', txnId), payload); logAdminEvent('Logged Expense', `₹${expenseAmount} for ${expenseReason.toUpperCase()}`); alert('Expense logged successfully!'); setExpenseModalVisible(false); setExpenseAmount(''); setExpenseReason(''); fetchData(); } catch (e) {}
+  };
+
+  const submitGuestCash = async () => {
+    if (!guestName || !cashAmount || isNaN(cashAmount) || Number(cashAmount) <= 0) return alert('Name and valid amount are required.');
+    const txnId = `GUEST_${Date.now()}`;
+    let payload = { transaction_date: new Date().toISOString(), transaction_id: txnId, member_id: 'GUEST', full_name: `${guestName.toUpperCase()} (GUEST)`, phone: guestPhone, amount: cashAmount, payment_method: 'CASH (OFFLINE)', gateway_txn_id: txnId };
+    if (cashType === 'GENERAL') { if (!cashReason) return alert('Reason is required.'); payload.donation_type = 'GENERAL'; payload.reason = cashReason; payload.months_count = 0; } 
+    else if (cashType === 'CAMPAIGN') { if (!cashCampId) return alert('Select campaign ID.'); const cName = campaigns.find(c=>c.campaign_id == cashCampId)?.title || 'Campaign'; payload.campaign_id = cashCampId; payload.reason = `Guest Cash Support: ${cName}`; payload.donation_type = 'FUND_RAISING'; }
     try {
       await setDoc(doc(db, 'transactions', txnId), payload);
-      alert('Expense logged successfully!'); setExpenseModalVisible(false); setExpenseAmount(''); setExpenseReason(''); fetchData();
-    } catch (e) { alert('Failed to log expense.'); }
+      if (cashType === 'CAMPAIGN') { const campRef = doc(db, 'campaigns', cashCampId); const cSnap = await getDoc(campRef); await updateDoc(campRef, { raised_amount: (parseFloat(cSnap.data().raised_amount)||0) + parseFloat(cashAmount) }); }
+      logAdminEvent('Logged Guest Cash', `₹${cashAmount} from ${guestName.toUpperCase()}`);
+      alert('Guest cash logged successfully!'); setGuestModalVisible(false); setGuestName(''); setGuestPhone(''); fetchData(); onViewReceipt({ ...payload, official_id: 'GUEST' });
+    } catch (e) { alert('Failed to log payment.'); }
   };
 
 
@@ -1563,29 +1401,6 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
              </View>
           </View>
         </View>
-
-        <View style={{marginTop: 30, paddingTop: 24, borderTopWidth: 1, borderTopColor: '#F1F5F9'}}>
-           <Text style={{fontWeight: '900', fontSize: 18, marginBottom: 16, color: '#004085'}}>Administrative Actions</Text>
-           <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 10}}>
-             {hasPerm('MANAGE_FINANCE') && u.role !== 'STUDENT' && u.membership_status === 'ACTIVE' && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#FEF08A'}]} onPress={() => {
-                const isSubsDisabled = !subStartMonth || (new Date(`${subStartMonth}-01`) > new Date());
-                setCashUser(u); 
-                setCashType(isSubsDisabled ? 'GENERAL' : 'SUBSCRIPTION'); 
-                setCashMonths('1'); 
-                setCashAmount(isSubsDisabled ? '' : String(Number(subAmount || 0))); 
-                setCashModalVisible(true);
-             }}><Text style={[styles.actionBtnText, {color: '#004085'}]}>💵 Log Cash</Text></TouchableOpacity> )}
-             {isCore && !u.is_core_admin && (
-                <>
-                  <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#F87171'}]} onPress={() => setResetModalVisible(true)}><Text style={[styles.actionBtnText, {color: 'white'}]}>🔑 Reset Pass</Text></TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, {backgroundColor: u.membership_status === 'ACTIVE' ? '#FB923C' : '#10B981'}]} onPress={() => handleToggleStatus(u.official_id, u.membership_status)}><Text style={[styles.actionBtnText, {color: 'white'}]}>{u.membership_status === 'ACTIVE' ? '🚫 Deactivate' : '⚡ Activate'}</Text></TouchableOpacity>
-                  {u.role === 'MEMBER' && !isPromotedSubAdmin && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#0EA5E9'}]} onPress={() => {setPromoteUserId(u.official_id); setPromoteModalVisible(true);}}><Text style={[styles.actionBtnText, {color: 'white'}]}>⭐ Promote Admin</Text></TouchableOpacity> )}
-                  {isPromotedSubAdmin && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#EF4444'}]} onPress={() => handleDemoteAdmin(u.official_id)}><Text style={[styles.actionBtnText, {color: 'white'}]}>❌ Revoke Admin</Text></TouchableOpacity> )}
-                  {u.role === 'STUDENT' && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#004085'}]} onPress={() => handleConvertStudent(u.official_id)}><Text style={[styles.actionBtnText, {color: 'white'}]}>🎓 Upgrade Student</Text></TouchableOpacity> )}
-                </>
-             )}
-           </View>
-        </View>
       </View>
     );
   };
@@ -1599,9 +1414,9 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
           {activeTab === 'STATS' && (
             <View>
               <View style={styles.statGrid}>
-                <View style={styles.statBoxLarge}><Text style={styles.statLargeVal}>{(directory.filter(u=>(u.role==='MEMBER'||u.role==='ADMIN') && !u.is_core_admin).length)}</Text><Text style={styles.statLargeKey}>Total Members</Text></View>
+                <View style={styles.statBoxLarge}><Text style={styles.statLargeVal}>{(directory.filter(u=>(u.role==='MEMBER'||u.role==='ADMIN')).length)}</Text><Text style={styles.statLargeKey}>Total Members</Text></View>
                 <View style={[styles.statBoxLarge, {backgroundColor: '#3B82F6'}]}><Text style={styles.statLargeVal}>{directory.filter(u=>u.role==='STUDENT').length}</Text><Text style={styles.statLargeKey}>Total Students</Text></View>
-                <View style={[styles.statBoxLarge, { backgroundColor: '#10B981' }]}><Text style={styles.statLargeVal}>{directory.filter(u=>!u.is_core_admin).length}</Text><Text style={styles.statLargeKey}>Grand Total</Text></View>
+                <View style={[styles.statBoxLarge, { backgroundColor: '#10B981' }]}><Text style={styles.statLargeVal}>{directory.length}</Text><Text style={styles.statLargeKey}>Grand Total</Text></View>
               </View>
 
               {/* RESPONSIVE GRAPH DASHBOARD */}
@@ -1685,6 +1500,9 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
                 <Text style={[styles.sectionTitle, {marginBottom: 0}]}>Finance Ledger</Text>
                 <View style={{flexDirection: 'row', gap: 12, flexWrap: 'wrap'}}>
+                   <TouchableOpacity style={[styles.neatBtnPrimary, {backgroundColor: '#F59E0B'}]} onPress={() => {setCashType('GENERAL'); setCashAmount(''); setCashReason(''); setGuestModalVisible(true);}}>
+                      <Text style={styles.neatBtnText}>+ Guest Cash</Text>
+                   </TouchableOpacity>
                    <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => setExpenseModalVisible(true)}>
                       <Text style={styles.neatBtnText}>+ Log Expense</Text>
                    </TouchableOpacity>
@@ -1944,24 +1762,22 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                     {loading ? <ActivityIndicator /> : campaigns.filter(c => (c.status === 'ACTIVE' || c.status === 'PAUSED') && (parseFloat(c.raised_amount)||0) < (parseFloat(c.target_amount)||1)).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).map(camp => {
                       const raised = parseFloat(camp.raised_amount) || 0; const target = parseFloat(camp.target_amount) || 1; const progress = Math.min(Math.round((raised / target) * 100), 100);
                       return (
-                        <View key={camp.campaign_id} style={styles.adminCard}>
+                        <TouchableOpacity key={camp.campaign_id} style={styles.adminCard} onPress={() => {setCashCampId(camp.campaign_id); setCampTitle(camp.title); setCampDesc(camp.description); setCampTarget(camp.target_amount); setCashAmount(camp.raised_amount); setCampStatus(camp.status); setCashReason(camp.remarks || ''); setShowCampaignModal(true);}}>
                           <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}><Text style={[styles.adminCardTitle, { flex: 1, marginRight: 10 }]} numberOfLines={1}>{camp.title}</Text><View style={[styles.statusBadge, { backgroundColor: camp.status === 'PAUSED' ? '#F59E0B' : '#10B981' }]}><Text style={styles.badgeText}>{camp.status}</Text></View></View>
                           <Text style={{ color: '#64748B', marginBottom: 16, fontWeight: '500', lineHeight: 20 }} numberOfLines={2}>{camp.description}</Text>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><Text style={{ fontWeight: '800', color: '#004085' }}>Raised: {'\u20B9'}{raised}</Text><Text style={{ color: '#94A3B8', fontWeight: '700' }}>Goal: {'\u20B9'}{target}</Text></View>
                           <View style={{ height: 12, backgroundColor: '#F1F5F9', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}><View style={{ width: `${progress}%`, backgroundColor: '#10B981', height: '100%' }} /></View>
                           <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12}}>
                              <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 10}}>
-                               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setViewCampDonors(camp)}><Text style={styles.neatBtnTextDark}>👥 Donors</Text></TouchableOpacity>
-                               <TouchableOpacity style={styles.neatBtnDark} onPress={() => {setCashCampId(camp.campaign_id); setCampTitle(camp.title); setCampDesc(camp.description); setCampTarget(camp.target_amount); setCashAmount(camp.raised_amount); setCampStatus(camp.status); setCashReason(camp.remarks || ''); setShowCampaignModal(true);}}><Text style={styles.neatBtnTextDark}>👀 View Info</Text></TouchableOpacity>
-                               <TouchableOpacity style={styles.neatBtnPrimary} onPress={() => { setCampTitle(camp.title); setCampDesc(camp.description); setCampTarget(camp.target_amount); setCashCampId(camp.campaign_id); setCashAmount(camp.raised_amount); setCampStatus(camp.status); setCashReason(camp.remarks || ''); setShowCampaignModal(true); }}><Text style={styles.neatBtnText}>✏️ Edit</Text></TouchableOpacity>
+                               <TouchableOpacity style={styles.neatBtnDark} onPress={(e) => { e.stopPropagation(); setViewCampDonors(camp); }}><Text style={styles.neatBtnTextDark}>👥 Donors</Text></TouchableOpacity>
+                               <TouchableOpacity style={styles.neatBtnPrimary} onPress={(e) => { e.stopPropagation(); setCampTitle(camp.title); setCampDesc(camp.description); setCampTarget(camp.target_amount); setCashCampId(camp.campaign_id); setCashAmount(camp.raised_amount); setCampStatus(camp.status); setCashReason(camp.remarks || ''); setShowCampaignModal(true); }}><Text style={styles.neatBtnText}>✏️ Edit</Text></TouchableOpacity>
                              </View>
                              <Text style={{ textAlign: 'right', fontSize: 13, fontWeight: '700', color: '#10B981' }}>{progress}% Funded</Text>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
-
 
                   <View style={styles.formCard}>
                     <Text style={styles.sectionTitle}>Past / Closed Drives</Text>
@@ -1969,17 +1785,17 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
                       const raised = parseFloat(camp.raised_amount) || 0; const target = parseFloat(camp.target_amount) || 1; const progress = Math.min(Math.round((raised / target) * 100), 100);
                       const goalAchieved = raised >= target;
                       return (
-                        <View key={camp.campaign_id} style={[styles.adminCard, {backgroundColor: '#F8FAFC'}]}>
+                        <TouchableOpacity key={camp.campaign_id} style={[styles.adminCard, {backgroundColor: '#F8FAFC'}]} onPress={() => {setCashCampId(camp.campaign_id); setCampTitle(camp.title); setCampDesc(camp.description); setCampTarget(camp.target_amount); setCashAmount(camp.raised_amount); setCampStatus(camp.status); setCashReason(camp.remarks || ''); setShowCampaignModal(true);}}>
                           <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}><Text style={[styles.adminCardTitle, { flex: 1, marginRight: 10, color: '#64748B' }]} numberOfLines={1}>{camp.title}</Text><View style={[styles.statusBadge, { backgroundColor: goalAchieved ? '#10B981' : '#EF4444' }]}><Text style={styles.badgeText}>{goalAchieved ? 'GOAL ACHIEVED' : 'STOPPED'}</Text></View></View>
                           {camp.remarks ? <Text style={{ color: '#991B1B', fontWeight: '800', marginBottom: 12, fontSize: 12 }}>REMARKS: {camp.remarks}</Text> : null}
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}><Text style={{ fontWeight: '800', color: '#64748B' }}>Raised: {'\u20B9'}{raised}</Text><Text style={{ color: '#94A3B8', fontWeight: '700' }}>Goal: {'\u20B9'}{target}</Text></View>
                           <View style={{ height: 12, backgroundColor: '#E2E8F0', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}><View style={{ width: `${progress}%`, backgroundColor: goalAchieved ? '#10B981' : '#94A3B8', height: '100%' }} /></View>
                           <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                              <View style={{flexDirection: 'row', gap: 10}}>
-                               <TouchableOpacity style={styles.neatBtnDark} onPress={() => setViewCampDonors(camp)}><Text style={styles.neatBtnTextDark}>👥 View Donors</Text></TouchableOpacity>
+                               <TouchableOpacity style={styles.neatBtnDark} onPress={(e) => { e.stopPropagation(); setViewCampDonors(camp); }}><Text style={styles.neatBtnTextDark}>👥 View Donors</Text></TouchableOpacity>
                              </View>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
@@ -2012,12 +1828,114 @@ function AdminDashboard({ currentUser, activeTab, onNavigate, onViewReceipt }) {
               })}
             </View>
           )}
+
+          {/* ADMIN ACTIONS TAB */}
+          {activeTab === 'ACTIONS' && (
+             <View>
+                <View style={[styles.formCard, {marginBottom: 24}]}>
+                   <Text style={styles.sectionTitle}>Perform Admin Actions</Text>
+                   <Text style={{color: '#64748B', marginBottom: 12, fontSize: 13}}>Search for a member or student to perform administrative overrides.</Text>
+                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 16, height: 44, marginBottom: 16 }}>
+                     <Text style={{ fontSize: 16, color: '#94A3B8', marginRight: 10 }}>🔍</Text>
+                     <TextInput style={{ flex: 1, fontSize: 14, color: '#004085', fontWeight: '500', outline: 'none' }} placeholder="Enter Name or ID..." placeholderTextColor="#94A3B8" autoCapitalize="characters" value={searchQuery} onChangeText={setSearchQuery} />
+                   </View>
+                   {searchQuery.length > 0 && directory.filter(u => u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5).map(u => (
+                      <TouchableOpacity key={u.official_id} style={{padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center'}} onPress={() => {setSelectedDetailUser(u); setSearchQuery('');}}>
+                         <Text style={{fontWeight: '800', color: '#004085', flex: 1}}>{u.full_name}</Text>
+                         <Text style={{fontSize: 12, color: '#64748B', fontWeight: '700'}}>{u.official_id}</Text>
+                      </TouchableOpacity>
+                   ))}
+                   
+                   {selectedDetailUser && (
+                     <View style={{marginTop: 24, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#E2E8F0'}}>
+                       <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+                         <View>
+                           <Text style={{fontSize: 18, fontWeight: '900', color: '#004085'}}>{selectedDetailUser.full_name}</Text>
+                           <Text style={{fontSize: 12, color: '#64748B', fontWeight: '800'}}>{selectedDetailUser.official_id} • {selectedDetailUser.role}</Text>
+                         </View>
+                         <TouchableOpacity onPress={() => setSelectedDetailUser(null)}><Text style={{color: '#EF4444', fontWeight: '800'}}>✕ Clear</Text></TouchableOpacity>
+                       </View>
+
+                       <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 10}}>
+                         {hasPerm('MANAGE_FINANCE') && selectedDetailUser.role !== 'STUDENT' && selectedDetailUser.membership_status === 'ACTIVE' && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#FEF08A'}]} onPress={() => { const isSubsDisabled = !subStartMonth || (new Date(`${subStartMonth}-01`) > new Date()); setCashUser(selectedDetailUser); setCashType(isSubsDisabled ? 'GENERAL' : 'SUBSCRIPTION'); setCashMonths('1'); setCashAmount(isSubsDisabled ? '' : String(Number(subAmount || 0))); setCashModalVisible(true); }}><Text style={[styles.actionBtnText, {color: '#004085'}]}>💵 Log Cash</Text></TouchableOpacity> )}
+                         {isCore && !selectedDetailUser.is_core_admin && (
+                            <>
+                              <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#F87171'}]} onPress={() => setResetModalVisible(true)}><Text style={[styles.actionBtnText, {color: 'white'}]}>🔑 Reset Pass</Text></TouchableOpacity>
+                              <TouchableOpacity style={[styles.actionBtn, {backgroundColor: selectedDetailUser.membership_status === 'ACTIVE' ? '#FB923C' : '#10B981'}]} onPress={async () => { const target = selectedDetailUser.membership_status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'; await updateDoc(doc(db, 'members', selectedDetailUser.official_id), { membership_status: target }); logAdminEvent(`${target} Account`, selectedDetailUser.official_id); alert(`Status updated to ${target}`); setSelectedDetailUser(null); fetchData(); }}><Text style={[styles.actionBtnText, {color: 'white'}]}>{selectedDetailUser.membership_status === 'ACTIVE' ? '🚫 Deactivate' : '⚡ Activate'}</Text></TouchableOpacity>
+                              {selectedDetailUser.role === 'MEMBER' && !(selectedDetailUser.role === 'ADMIN' && !selectedDetailUser.is_core_admin) && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#0EA5E9'}]} onPress={() => {setPromoteUserId(selectedDetailUser.official_id); setPromoteModalVisible(true);}}><Text style={[styles.actionBtnText, {color: 'white'}]}>⭐ Promote Admin</Text></TouchableOpacity> )}
+                              {(selectedDetailUser.role === 'ADMIN' && !selectedDetailUser.is_core_admin) && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#EF4444'}]} onPress={() => { Alert.alert("Revoke Admin", "Are you sure?", [{ text: "Cancel", style: "cancel" }, { text: "Revoke", onPress: async () => { await updateDoc(doc(db, 'members', selectedDetailUser.official_id), { role: 'MEMBER', is_core_admin: false, admin_permissions: '[]' }); logAdminEvent('Revoked Admin', selectedDetailUser.official_id); setSelectedDetailUser(null); fetchData(); } }]); }}><Text style={[styles.actionBtnText, {color: 'white'}]}>❌ Revoke Admin</Text></TouchableOpacity> )}
+                              {selectedDetailUser.role === 'STUDENT' && ( <TouchableOpacity style={[styles.actionBtn, {backgroundColor: '#004085'}]} onPress={() => { Alert.alert("Upgrade", "Upgrade to Member?", [{ text: "Cancel", style: "cancel" }, { text: "Upgrade", onPress: async () => { await updateDoc(doc(db, 'members', selectedDetailUser.official_id), { role: 'MEMBER' }); logAdminEvent('Upgraded Student to Member', selectedDetailUser.official_id); setSelectedDetailUser(null); fetchData(); } }]); }}><Text style={[styles.actionBtnText, {color: 'white'}]}>🎓 Upgrade Student</Text></TouchableOpacity> )}
+                            </>
+                         )}
+                       </View>
+                     </View>
+                   )}
+                </View>
+                <GoverningBodyWidget isEditing={true} />
+             </View>
+          )}
+
+          {/* EVENT LOGS TAB */}
+          {activeTab === 'EVENTS' && (
+             <View style={styles.formCard}>
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12}}>
+                   <Text style={[styles.sectionTitle, {marginBottom: 0}]}>System Event Logs</Text>
+                   <View style={{flexDirection: 'row', gap: 8}}>
+                      <TouchableOpacity style={[styles.filterChip, repRole !== 'ADMIN' && repRole !== 'USER' && styles.filterChipActive]} onPress={() => setRepRole('')}><Text style={[styles.filterChipText, repRole !== 'ADMIN' && repRole !== 'USER' && {color:'white'}]}>All</Text></TouchableOpacity>
+                      <TouchableOpacity style={[styles.filterChip, repRole === 'ADMIN' && styles.filterChipActive]} onPress={() => setRepRole('ADMIN')}><Text style={[styles.filterChipText, repRole === 'ADMIN' && {color:'white'}]}>Admin</Text></TouchableOpacity>
+                      <TouchableOpacity style={[styles.filterChip, repRole === 'USER' && styles.filterChipActive]} onPress={() => setRepRole('USER')}><Text style={[styles.filterChipText, repRole === 'USER' && {color:'white'}]}>Members</Text></TouchableOpacity>
+                   </View>
+                </View>
+                
+                {loading ? <ActivityIndicator /> : (
+                  <View>
+                     {[
+                        ...globalTxns.map(t => ({ date: t.transaction_date, name: t.full_name || 'Unknown', action: `Logged ${t.donation_type === 'FUND_RAISING' ? 'CAMPAIGN' : t.donation_type}`, target: `₹${t.amount}`, type: (t.payment_method && t.payment_method.includes('OFFLINE')) ? 'ADMIN' : 'USER' })), 
+                        ...systemLogs.map(s => ({ date: s.timestamp, name: s.admin_name, action: s.action, target: s.details || s.target, type: 'ADMIN' }))
+                      ]
+                      .filter(log => !repRole || log.type === repRole)
+                      .sort((a,b) => new Date(b.date) - new Date(a.date))
+                      .slice(0, 50)
+                      .map((log, i) => (
+                        <View key={i} style={styles.historyRow}>
+                           <View style={{flex: 1}}>
+                              <Text style={{fontWeight: '800', color: '#004085', fontSize: 14}}>{log.action}</Text>
+                              <Text style={{fontSize: 12, color: '#475569', marginTop: 4}}>{log.target}</Text>
+                           </View>
+                           <View style={{alignItems: 'flex-end'}}>
+                              <Text style={{fontSize: 12, fontWeight: '700', color: log.type === 'ADMIN' ? '#EF4444' : '#10B981'}}>{log.name} {log.type === 'ADMIN' && '🛡️'}</Text>
+                              <Text style={{fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 4}}>{new Date(log.date).toLocaleString()}</Text>
+                           </View>
+                        </View>
+                     ))}
+                  </View>
+                )}
+             </View>
+          )}
+
         </>
       )}
       </ScrollView>
 
 
       {/* ALL ADMIN MODALS */}
+      {guestModalVisible && (
+        <View style={[styles.modalOverlay, {position: Platform.OS === 'web' ? 'fixed' : 'absolute'}]}>
+          <View style={styles.modalCard}>
+            <Text style={[styles.sectionTitle, { color: '#F59E0B', marginBottom: 24 }]}>Log Guest Cash</Text>
+            <Text style={styles.label}>Guest Full Name *</Text><TextInput style={styles.input} autoCapitalize="characters" value={guestName} onChangeText={setGuestName} />
+            <Text style={styles.label}>Guest Phone (Optional)</Text><TextInput style={styles.input} keyboardType="numeric" maxLength={10} value={guestPhone} onChangeText={setGuestPhone} />
+            <View style={styles.quickSelectContainer}>
+              <TouchableOpacity style={[styles.quickBtn, cashType === 'GENERAL' && styles.quickBtnActive]} onPress={()=>{setCashType('GENERAL'); setCashAmount('');}}><Text style={[styles.quickBtnText, cashType === 'GENERAL' && styles.quickBtnTextActive]}>General</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.quickBtn, cashType === 'CAMPAIGN' && styles.quickBtnActive]} onPress={()=>{setCashType('CAMPAIGN'); setCashAmount('');}}><Text style={[styles.quickBtnText, cashType === 'CAMPAIGN' && styles.quickBtnTextActive]}>Campaign</Text></TouchableOpacity>
+            </View>
+            {cashType === 'GENERAL' && ( <View><Text style={styles.label}>Reason</Text><TextInput style={styles.input} autoCapitalize="characters" value={cashReason} onChangeText={t => setCashReason(t.toUpperCase())} /></View> )}
+            {cashType === 'CAMPAIGN' && ( <View><Text style={styles.label}>Select Campaign</Text>{campaigns.filter(c => c.status === 'ACTIVE').length === 0 ? <Text style={{color: '#EF4444', marginBottom: 24, fontWeight: '800'}}>No active campaigns.</Text> : <ScrollView style={{maxHeight: 150, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12}}>{campaigns.filter(c => c.status === 'ACTIVE').map(c => ( <TouchableOpacity key={c.campaign_id} style={{padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', backgroundColor: cashCampId === c.campaign_id ? '#EFF6FF' : 'white'}} onPress={() => setCashCampId(c.campaign_id)}><Text style={{color: '#004085', fontWeight: cashCampId === c.campaign_id ? '800' : '600'}}>{c.title}</Text></TouchableOpacity> ))}</ScrollView>}</View> )}
+            <Text style={styles.label}>Amount Collected (₹) *</Text><TextInput style={styles.input} keyboardType="numeric" value={cashAmount} onChangeText={setCashAmount} />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16, gap: 12 }}><TouchableOpacity style={styles.neatBtnDark} onPress={() => setGuestModalVisible(false)}><Text style={styles.neatBtnTextDark}>Cancel</Text></TouchableOpacity><TouchableOpacity style={styles.neatBtnSuccess} onPress={submitGuestCash}><Text style={styles.neatBtnText}>Log Guest Cash</Text></TouchableOpacity></View>
+          </View>
+        </View>
+      )}
       {configModal && (
         <View style={[styles.modalOverlay, {position: Platform.OS === 'web' ? 'fixed' : 'absolute'}]}>
           <View style={styles.modalCard}>
@@ -2338,7 +2256,9 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
           <Text style={{fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24}}>Welcome to HIYWA. Your profile has been created securely.</Text>
           <View style={{backgroundColor: '#F8FAFC', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', width: '100%', alignItems: 'center', marginBottom: 24}}><Text style={{fontSize: 11, color: '#64748B', fontWeight: '800', textTransform: 'uppercase', marginBottom: 8}}>Your Official Login ID</Text><Text style={{fontSize: 28, fontWeight: '900', color: '#004085', letterSpacing: 2}}>{registeredUser.official_id}</Text></View>
           <Text style={{textAlign: 'center', color: '#EF4444', marginBottom: 24, fontWeight: '800'}}>{isAdminAuth ? `Default Password Set: Hiywa@123\nUser will be forced to change this on their first login.` : 'Please log in with the password you created.'}</Text>
-          <TouchableOpacity style={[styles.button, {backgroundColor: '#004085', width: '100%', marginTop: 0}]} onPress={() => { setRole(null); setStep(1); setRegisteredUser(null); if(isAdminAuth) onBack(); }}><Text style={styles.buttonText}>Finish & Return</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.button, {backgroundColor: '#004085', width: '100%', marginTop: 0}]} onPress={() => { setRole(null); setStep(1); setRegisteredUser(null); onBack(); }}>
+            <Text style={styles.buttonText}>Finish & Return to Login</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -2348,8 +2268,7 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIDHAYATHUL ISLAM</Text>
-                <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', marginTop: 2 }}>YOUTH WELFARE ASSOCIATION</Text>
+                <View style={{ flexShrink: 1 }}><Text style={{ fontSize: 18, fontWeight: '900', color: '#004085', flexShrink: 1 }} numberOfLines={1}>HIYWA</Text><Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text></View>
               </View></View></View> )}
         <View style={styles.contentHeader}><View style={{ flex: 1 }}><Text style={[styles.contentTitle, {fontSize: 16}]}>Select Registration Type</Text></View><TouchableOpacity onPress={onBack} style={styles.neatBtnPrimary}><Text style={styles.neatBtnText}>← Cancel</Text></TouchableOpacity></View>
         <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1, justifyContent: 'center' }}>
@@ -2366,7 +2285,7 @@ function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false }) {
     <View style={{flex: 1}}>
       <KeyboardAvoidingView style={{flex: 1, backgroundColor: '#F4F7FE'}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {isSubmitting && ( <View style={styles.modalOverlay}><View style={[styles.modalCard, {alignItems: 'center'}]}><ActivityIndicator size="large" color="#004085" style={{ transform: [{ scale: 1.5 }], marginBottom: 24 }} /><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085', marginBottom: 8 }}>Processing...</Text></View></View> )}
-        {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085' }}>HIDHAYATHUL ISLAM</Text><Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>YOUTH WELFARE ASSOCIATION</Text></View></View></View> )}
+        {!isAdminAuth && ( <View style={[styles.contentHeader, {borderBottomWidth: 0, paddingBottom: 0}]}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}><Image source={require('./hiywalogo.png')} style={{ width: 44, height: 44, borderRadius: 8, marginRight: 12 }} /><View style={{ flexShrink: 1 }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#004085' }}>HIYWA</Text><Text style={{ fontSize: 11, color: '#64748B', fontWeight: '800', marginTop: 2 }}>MTK PURAM</Text></View></View></View> )}
         <View style={{flexDirection: 'row', alignItems: 'center', padding: 24, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 16}}><TouchableOpacity style={styles.neatBtnDark} onPress={() => { if (isAdminAuth) onBack(); else { setRole(null); setStep(1); } }}><Text style={styles.neatBtnTextDark}>← Back</Text></TouchableOpacity><Text style={[styles.sectionTitle, {marginBottom: 0}]}>{role === 'STUDENT' ? 'Student Registration' : 'Member Registration'}</Text></View>
 
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 60 }}>
