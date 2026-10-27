@@ -62,6 +62,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseReason, setExpenseReason] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('OFFICE USE'); // New split
   const [showDuesModal, setShowDuesModal] = useState(false);
   const [showCumulativeModal, setShowCumulativeModal] = useState(false);
 
@@ -87,6 +88,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [campTarget, setCampTarget] = useState('');
   const [campStatus, setCampStatus] = useState('ACTIVE');
   const [viewCampDonors, setViewCampDonors] = useState(null);
+  const [viewClosedCamp, setViewClosedCamp] = useState(null);
   const [viewMemberContrib, setViewMemberContrib] = useState(null);
 
   const [statusRemarkModal, setStatusRemarkModal] = useState(null); // { camp, targetStatus }
@@ -145,6 +147,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   useEffect(() => {
     setSelectedDetailUser(null);
     setViewCampDonors(null);
+    setViewClosedCamp(null);
     fetchData();
   }, [activeTab]);
 
@@ -314,11 +317,21 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const submitExpenseLog = async () => {
     if (!expenseAmount || Number(expenseAmount) <= 0 || !expenseReason) return alert('Enter valid amount and reason.');
     const txnId = `EXP_${Date.now()}`;
-    const payload = { transaction_date: new Date().toISOString(), transaction_id: txnId, member_id: currentUser.official_id, full_name: currentUser.full_name, amount: expenseAmount, payment_method: 'CASH/BANK', donation_type: 'EXPENSE', reason: expenseReason.toUpperCase() };
+    const payload = { 
+      transaction_date: new Date().toISOString(), 
+      transaction_id: txnId, 
+      member_id: currentUser.official_id, 
+      full_name: currentUser.full_name, 
+      amount: expenseAmount, 
+      payment_method: 'CASH/BANK', 
+      donation_type: 'EXPENSE', 
+      expense_category: expenseCategory, // Adds Office Use / Charity
+      reason: expenseReason.toUpperCase() 
+    };
     await setDoc(doc(db, 'transactions', txnId), payload);
-    logAdminEvent('Logged Expense', `₹${expenseAmount} for ${expenseReason.toUpperCase()}`);
+    logAdminEvent('Logged Expense', `₹${expenseAmount} for ${expenseReason.toUpperCase()} (${expenseCategory})`);
     alert('Expense logged!');
-    setExpenseModalVisible(false); setExpenseAmount(''); setExpenseReason(''); fetchData();
+    setExpenseModalVisible(false); setExpenseAmount(''); setExpenseReason(''); setExpenseCategory('OFFICE USE'); fetchData();
   };
 
   const submitGuestCash = async () => {
@@ -504,7 +517,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   };
 
   // Render Enhanced Campaign Card for Admin
-  const renderAdminCampaignCard = (c) => {
+  const renderAdminCampaignCard = (c, isCompact = false) => {
     const raised = parseFloat(c.raised_amount) || 0;
     const target = parseFloat(c.target_amount) || 1;
     const remaining = Math.max(0, target - raised);
@@ -514,6 +527,19 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
     const isStopped = c.status === 'STOPPED' || goalAchieved;
     const donorCount = globalTxns.filter(t => t.campaign_id === c.campaign_id).length;
 
+    // COMPACT LIST VIEW (Only Title shown for Completed / Stopped Drives)
+    if (isCompact) {
+      return (
+        <div key={c.campaign_id} onClick={() => setViewClosedCamp(c)} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '12px 14px', border: '1px solid #cbd5e1', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+          <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{c.title}</h4>
+          <span style={{ backgroundColor: goalAchieved ? '#dcfce7' : '#fee2e2', color: goalAchieved ? '#16a34a' : '#dc2626', padding: '3px 8px', borderRadius: '6px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase' }}>
+            {goalAchieved ? '🎉 Goal Met' : '⏹️ Stopped'} →
+          </span>
+        </div>
+      );
+    }
+
+    // FULL DETAILED CARD VIEW
     return (
       <div key={c.campaign_id} style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -549,65 +575,58 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={() => setViewCampDonors(c)}
-            style={{ padding: '6px 10px', backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', borderRadius: '7px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-          >
+        {/* PRIMARY ACTIONS ROW (Donors & Log Cash Separated) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <button type="button" onClick={() => setViewCampDonors(c)} style={{ padding: '7px 12px', backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>
             👥 Donors ({donorCount})
           </button>
-
-          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-            {goalAchieved ? (
-              <span style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', color: '#94a3b8', borderRadius: '7px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase' }}>
-                🔒 Goal Met • Locked
-              </span>
-            ) : (
-              <>
-                {c.status === 'ACTIVE' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCashCampId(c.campaign_id);
-                      setSelectedDonorMemberId('');
-                      setCashAmount('');
-                      setCampCashModalVisible(true);
-                    }}
-                    style={{ padding: '6px 10px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', borderRadius: '7px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-                  >
-                    💵 Log Cash
-                  </button>
-                )}
-                {c.status === 'ACTIVE' && (
-                  <button type="button" onClick={() => handleStatusButtonClick(c, 'PAUSED')} style={{ padding: '6px 9px', backgroundColor: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', borderRadius: '7px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>⏸️ Pause</button>
-                )}
-                {c.status === 'PAUSED' && (
-                  <button type="button" onClick={() => handleStatusButtonClick(c, 'ACTIVE')} style={{ padding: '6px 9px', backgroundColor: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '7px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>▶️ Resume</button>
-                )}
-                {c.status !== 'STOPPED' && (
-                  <button type="button" onClick={() => handleStatusButtonClick(c, 'STOPPED')} style={{ padding: '6px 9px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '7px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>⏹️ Stop</button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCashCampId(c.campaign_id);
-                    setCampTitle(c.title);
-                    setCampDesc(c.description);
-                    setCampTarget(c.target_amount);
-                    setCashAmount(c.raised_amount);
-                    setCampStatus(c.status);
-                    setCashReason(c.remarks || '');
-                    setShowCampaignModal(true);
-                  }}
-                  style={{ padding: '6px 10px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-                >
-                  ✏️ Edit
-                </button>
-              </>
-            )}
-          </div>
+          
+          {!isStopped && c.status === 'ACTIVE' && (
+            <button
+              type="button"
+              onClick={() => {
+                setCashCampId(c.campaign_id);
+                setSelectedDonorMemberId('');
+                setCashAmount('');
+                setCampCashModalVisible(true);
+              }}
+              style={{ padding: '7px 12px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }}
+            >
+              💵 Log Cash
+            </button>
+          )}
         </div>
+
+        {/* ADMIN MANAGEMENT CONTROLS ROW (Only visible if drive is not stopped) */}
+        {!isStopped && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', backgroundColor: '#f8fafc', padding: '8px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            {c.status === 'ACTIVE' && (
+              <button type="button" onClick={() => handleStatusButtonClick(c, 'PAUSED')} style={{ flex: 1, padding: '7px', backgroundColor: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>⏸️ Pause</button>
+            )}
+            {c.status === 'PAUSED' && (
+              <button type="button" onClick={() => handleStatusButtonClick(c, 'ACTIVE')} style={{ flex: 1, padding: '7px', backgroundColor: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>▶️ Resume</button>
+            )}
+            {c.status !== 'STOPPED' && (
+              <button type="button" onClick={() => handleStatusButtonClick(c, 'STOPPED')} style={{ flex: 1, padding: '7px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>⏹️ Stop</button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setCashCampId(c.campaign_id);
+                setCampTitle(c.title);
+                setCampDesc(c.description);
+                setCampTarget(c.target_amount);
+                setCashAmount(c.raised_amount);
+                setCampStatus(c.status);
+                setCashReason(c.remarks || '');
+                setShowCampaignModal(true);
+              }}
+              style={{ flex: 1, padding: '7px', backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+            >
+              ✏️ Edit
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -925,14 +944,26 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
             {/* 2. MEMBER & STUDENT DIRECTORY */}
             {(activeTab === 'USERS' || activeTab === 'STUDENTS') && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>
-                    Total {activeTab === 'USERS' ? 'Members' : 'Students'}: {filteredDirectory.length}
-                  </h3>
+                {/* Modern Total Count Card */}
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '42px', height: '42px', backgroundColor: '#eff6ff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: '1px solid #bfdbfe' }}>
+                      {activeTab === 'USERS' ? '👥' : '🎓'}
+                    </div>
+                    <div>
+                      <h3 style={{ margin: '0 0 2px 0', fontSize: '9.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Total Registered {activeTab === 'USERS' ? 'Members' : 'Students'}
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1e3a8a' }}>
+                        {filteredDirectory.length}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                  <input type="text" placeholder="Search Name..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, padding: '9px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none' }} />
-                  <button onClick={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')} style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '0 12px', borderRadius: '10px', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add</button>
+
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                  <input type="text" placeholder="Search Name..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none' }} />
+                  <button onClick={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')} style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '0 14px', borderRadius: '10px', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add</button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {filteredDirectory.map(m => {
@@ -1070,17 +1101,24 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
             {/* 2B. SUBSCRIPTION DUES PAGE (CLICK MEMBER TO LOG CASH DIRECTLY) */}
             {activeTab === 'SUBSCRIPTIONS' && (
               <div>
-                {/* Summary Banner */}
-                <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px 16px', border: '1px solid #cbd5e1', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>⏳ Pending Subscription Dues</h4>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '9.5px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>
-                      {pendingDuesList.length} Members Due • Tap Name to Log Cash
-                    </p>
+                {/* Modern Summary Banner */}
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '42px', height: '42px', backgroundColor: '#fef2f2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: '1px solid #fecaca' }}>
+                      ⏳
+                    </div>
+                    <div>
+                      <h3 style={{ margin: '0 0 2px 0', fontSize: '9.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Total Pending Arrears
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#ef4444' }}>
+                        ₹{totalPendingDuesVal.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '8px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Total Arrears</span>
-                    <span style={{ fontSize: '18px', fontWeight: '900', color: '#ef4444' }}>₹{totalPendingDuesVal.toLocaleString()}</span>
+                  <div style={{ textAlign: 'right', paddingLeft: '12px', borderLeft: '1px solid #e2e8f0' }}>
+                    <span style={{ display: 'block', fontSize: '8px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Members Due</span>
+                    <span style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>{pendingDuesList.length}</span>
                   </div>
                 </div>
 
@@ -1091,8 +1129,9 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                     placeholder="Search Due Member Name..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
                   />
+                  <p style={{ margin: '6px 0 0 2px', fontSize: '9px', fontWeight: '800', color: '#1e3a8a', textTransform: 'uppercase' }}>Tap on a member below to log their payment</p>
                 </div>
 
                 {/* Due Members List */}
@@ -1142,14 +1181,9 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                               </div>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                              <div style={{ textAlign: 'right' }}>
-                                <span style={{ display: 'block', fontSize: '12px', fontWeight: '900', color: '#ef4444' }}>₹{u.duesAmount}</span>
-                                <span style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#64748b' }}>{u.duesMonths} Mo Due</span>
-                              </div>
-                              <span style={{ backgroundColor: '#0a192f', color: '#fbbf24', padding: '6px 9px', borderRadius: '8px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase' }}>
-                                💵 Log Cash
-                              </span>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <span style={{ display: 'block', fontSize: '12px', fontWeight: '900', color: '#ef4444' }}>₹{u.duesAmount}</span>
+                              <span style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#64748b' }}>{u.duesMonths} Mo Due</span>
                             </div>
                           </div>
                         );
@@ -1160,25 +1194,53 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
             )}
 
             {/* 3. FINANCE LEDGER TAB */}
-            {activeTab === 'FINANCE' && (
+            {activeTab === 'FINANCE' && (() => {
+              const incSub = allIncomes.filter(t => t.donation_type === 'SUBSCRIPTION').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const incCamp = allIncomes.filter(t => t.donation_type === 'FUND_RAISING' || t.donation_type === 'CAMPAIGN').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const incGen = allIncomes.filter(t => t.donation_type === 'GENERAL').reduce((s, t) => s + Number(t.amount || 0), 0);
+              
+              const expOffice = allExpenses.filter(t => t.expense_category === 'OFFICE USE').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const expCharity = allExpenses.filter(t => t.expense_category === 'CHARITY').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const expOther = allExpenses.filter(t => !t.expense_category).reduce((s, t) => s + Number(t.amount || 0), 0); // Legacy backwards compatibility
+
+              return (
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
-                  <button onClick={() => { setCashType('GENERAL'); setDonationDonorType('GUEST'); setSelectedDonorMemberId(''); setGuestName(''); setGuestPhone(''); setCashAmount(''); setCashReason(''); setGuestModalVisible(true); }} style={{ padding: '10px 6px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Log Donation</button>
-                  <button onClick={() => setExpenseModalVisible(true)} style={{ padding: '10px 6px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Log Expense</button>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                  <button onClick={() => { setIsGuestDonation(true); setCashAmount(''); setCashReason(''); setGuestName(''); setDonationMember(''); setShowLogDonationModal(true); }} style={{ flex: 1, padding: '10px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Log Donation</button>
+                  <button onClick={() => setExpenseModalVisible(true)} style={{ flex: 1, padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Log Expense</button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '10px' }}>
-                  <div style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '12px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                    <span style={{ fontSize: '7.5px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Income</span>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', fontWeight: '900', color: '#10b981' }}>₹{(totalIncomeVal + Number(initialAmount)).toLocaleString()}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                  {/* Income Split Card */}
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>Total Income</span>
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#10b981' }}>₹{(totalIncomeVal + Number(initialAmount)).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center' }}>
+                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Subscriptions</span><span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a' }}>₹{incSub.toLocaleString()}</span></div>
+                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Fund Drives</span><span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a' }}>₹{incCamp.toLocaleString()}</span></div>
+                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Gen / Init</span><span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a' }}>₹{(incGen + Number(initialAmount)).toLocaleString()}</span></div>
+                    </div>
                   </div>
-                  <div style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '12px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                    <span style={{ fontSize: '7.5px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Expense</span>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', fontWeight: '900', color: '#ef4444' }}>₹{totalExpenseVal.toLocaleString()}</p>
-                  </div>
-                  <div style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '12px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                    <span style={{ fontSize: '7.5px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Balance</span>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', fontWeight: '900', color: '#1e3a8a' }}>₹{currentBalance.toLocaleString()}</p>
+
+                  {/* Expense Split & Balance Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: '10px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>Total Exp</span>
+                        <span style={{ fontSize: '14px', fontWeight: '900', color: '#ef4444' }}>₹{totalExpenseVal.toLocaleString()}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontWeight: '800', color: '#475569' }}>
+                        <span>Office: <span style={{ color: '#0f172a' }}>₹{(expOffice + expOther).toLocaleString()}</span></span>
+                        <span>Charity: <span style={{ color: '#0f172a' }}>₹{expCharity.toLocaleString()}</span></span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                      <span style={{ fontSize: '10px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', marginBottom: '4px' }}>Net Balance</span>
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#1e3a8a' }}>₹{currentBalance.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1188,12 +1250,28 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   ))}
                 </div>
 
+                {/* Ledger Search Box */}
+                <input
+                  type="text"
+                  placeholder={`Search ${ledgerTab} transactions...`}
+                  value={finSearchQuery}
+                  onChange={e => setFinSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', marginBottom: '10px' }}
+                />
+
                 <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '4px', border: '1px solid #cbd5e1' }}>
-                  {(ledgerTab === 'INCOME' ? filteredIncomes : filteredExpensesList).map((t, i) => (
+                  {(ledgerTab === 'INCOME' ? filteredIncomes : filteredExpensesList).length === 0 ? (
+                    <p style={{ padding: '14px', textAlign: 'center', fontSize: '10px', color: '#94a3b8', fontWeight: '700', margin: 0 }}>No matching transactions.</p>
+                  ) : (ledgerTab === 'INCOME' ? filteredIncomes : filteredExpensesList).map((t, i) => (
                     <div key={t.transaction_id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
                       <div>
-                        <p style={{ margin: '0 0 1px 0', fontSize: '10.5px', fontWeight: '900', color: '#0f172a' }}>{ledgerTab === 'INCOME' ? t.full_name : t.reason}</p>
-                        <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '700' }}>{new Date(t.transaction_date).toLocaleDateString('en-GB')} • {t.reason}</p>
+                        <p style={{ margin: '0 0 1px 0', fontSize: '10.5px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>
+                          {ledgerTab === 'INCOME' ? t.full_name : t.reason}
+                        </p>
+                        <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
+                          {new Date(t.transaction_date).toLocaleDateString('en-GB')} 
+                          {t.expense_category ? ` • ${t.expense_category}` : (ledgerTab === 'INCOME' && t.donation_type ? ` • ${t.donation_type}` : '')}
+                        </p>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ fontSize: '12px', fontWeight: '900', color: ledgerTab === 'INCOME' ? '#10b981' : '#ef4444' }}>{ledgerTab === 'INCOME' ? '+' : '-'}₹{t.amount}</span>
@@ -1203,7 +1281,8 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   ))}
                 </div>
               </div>
-            )}
+            );
+            })()}
 
             {/* CONTRIBUTIONS (LEADERBOARD & SPLIT) */}
             {activeTab === 'CONTRIBUTIONS' && (() => {
@@ -1324,6 +1403,14 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                         ))
                     )}
                   </div>
+                ) : viewClosedCamp ? (
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                      <button onClick={() => setViewClosedCamp(null)} style={{ backgroundColor: '#f1f5f9', border: 'none', padding: '5px 10px', borderRadius: '7px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>← Back</button>
+                      <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>Closed Drive Details</h4>
+                    </div>
+                    {renderAdminCampaignCard(viewClosedCamp, false)}
+                  </div>
                 ) : (
                   <div>
                     <div style={{ backgroundColor: '#ffffff', padding: '12px 14px', borderRadius: '16px', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
@@ -1336,10 +1423,10 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                       </button>
                     </div>
 
-                    {campaigns.filter(c => (c.status === 'ACTIVE' || c.status === 'PAUSED') && (parseFloat(c.raised_amount) || 0) < (parseFloat(c.target_amount) || 1)).map(renderAdminCampaignCard)}
+                    {campaigns.filter(c => (c.status === 'ACTIVE' || c.status === 'PAUSED') && (parseFloat(c.raised_amount) || 0) < (parseFloat(c.target_amount) || 1)).map(c => renderAdminCampaignCard(c, false))}
 
                     <h3 style={{ margin: '16px 0 8px 0', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: '#475569' }}>Completed / Stopped Drives</h3>
-                    {campaigns.filter(c => c.status === 'STOPPED' || (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1)).map(renderAdminCampaignCard)}
+                    {campaigns.filter(c => c.status === 'STOPPED' || (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1)).map(c => renderAdminCampaignCard(c, true))}
                   </div>
                 )}
               </div>
@@ -1805,11 +1892,30 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ width: '100%', maxWidth: '300px', backgroundColor: '#fff', borderRadius: '20px', padding: '18px' }}>
             <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: '900', color: '#ef4444', textTransform: 'uppercase' }}>Log Trust Expense</h4>
-            <input placeholder="Reason / Vendor" value={expenseReason} onChange={e => setExpenseReason(e.target.value.toUpperCase())} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '8px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }} />
-            <input type="number" placeholder="Amount (₹)" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '10px', fontSize: '12px', fontWeight: '800', boxSizing: 'border-box' }} />
+            
+            <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px', marginBottom: '12px', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={() => setExpenseCategory('OFFICE USE')}
+                style={{ flex: 1, padding: '8px 4px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'OFFICE USE' ? '#0a192f' : 'transparent', color: expenseCategory === 'OFFICE USE' ? '#ffffff' : '#475569', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+              >
+                🏢 Office
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpenseCategory('CHARITY')}
+                style={{ flex: 1, padding: '8px 4px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'CHARITY' ? '#0a192f' : 'transparent', color: expenseCategory === 'CHARITY' ? '#ffffff' : '#475569', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+              >
+                🤝 Charity
+              </button>
+            </div>
+
+            <input placeholder="Reason / Vendor / Beneficiary *" value={expenseReason} onChange={e => setExpenseReason(e.target.value.toUpperCase())} style={{ width: '100%', padding: '10px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '8px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }} />
+            <input type="number" placeholder="Amount (₹) *" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '14px', fontSize: '12px', fontWeight: '800', boxSizing: 'border-box' }} />
+            
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setExpenseModalVisible(false)} style={{ flex: 1, padding: '9px', backgroundColor: '#f1f5f9', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px' }}>Cancel</button>
-              <button onClick={submitExpenseLog} style={{ flex: 1, padding: '9px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px' }}>Save Expense</button>
+              <button onClick={() => { setExpenseModalVisible(false); setExpenseCategory('OFFICE USE'); }} style={{ flex: 1, padding: '10px', backgroundColor: '#f1f5f9', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px', color: '#475569', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={submitExpenseLog} style={{ flex: 1, padding: '10px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px', textTransform: 'uppercase', cursor: 'pointer' }}>Save Expense</button>
             </div>
           </div>
         </div>
@@ -1896,29 +2002,18 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
       {cashModalVisible && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ width: '100%', maxWidth: '310px', backgroundColor: '#fff', borderRadius: '20px', padding: '18px' }}>
-            <h4 style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: '900', textTransform: 'uppercase' }}>Log Member Cash</h4>
-            <p style={{ margin: '0 0 10px 0', fontSize: '10px', fontWeight: '800', color: '#1e3a8a' }}>{cashUser?.full_name} ({cashUser?.official_id})</p>
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
-              {['SUBSCRIPTION', 'GENERAL', 'CAMPAIGN'].map(t => (
-                <button key={t} onClick={() => setCashType(t)} style={{ flex: 1, padding: '7px 2px', borderRadius: '7px', border: 'none', backgroundColor: cashType === t ? '#1e3a8a' : '#f1f5f9', color: cashType === t ? '#fff' : '#475569', fontSize: '9px', fontWeight: '900' }}>{t}</button>
-              ))}
-            </div>
-            {cashType === 'SUBSCRIPTION' && (
-              <input type="number" placeholder="Months" value={cashMonths} onChange={e => { setCashMonths(e.target.value); setCashAmount(String(Number(e.target.value || 1) * Number(subAmount))); }} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '8px', boxSizing: 'border-box' }} />
-            )}
-            {cashType === 'GENERAL' && (
-              <input placeholder="Reason" value={cashReason} onChange={e => setCashReason(e.target.value.toUpperCase())} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '8px', boxSizing: 'border-box' }} />
-            )}
-            {cashType === 'CAMPAIGN' && (
-              <select value={cashCampId} onChange={e => setCashCampId(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '8px', fontSize: '11px', fontWeight: '700' }}>
-                <option value="">-- Select Active Campaign --</option>
-                {campaigns.filter(c => c.status === 'ACTIVE').map(c => <option key={c.campaign_id} value={c.campaign_id}>{c.title}</option>)}
-              </select>
-            )}
-            <input type="number" placeholder="Amount (₹)" value={cashAmount} onChange={e => setCashAmount(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '10px', boxSizing: 'border-box' }} />
+            <h4 style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>📅 Log Subscription</h4>
+            <p style={{ margin: '0 0 12px 0', fontSize: '10px', fontWeight: '800', color: '#1e3a8a' }}>{cashUser?.full_name} ({cashUser?.official_id})</p>
+            
+            <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '3px' }}>Number of Months *</label>
+            <input type="number" placeholder="Months" value={cashMonths} onChange={e => { setCashMonths(e.target.value); setCashAmount(String(Number(e.target.value || 1) * Number(subAmount))); }} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '10px', boxSizing: 'border-box' }} />
+            
+            <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '3px' }}>Total Amount (₹) *</label>
+            <input type="number" placeholder="Amount (₹)" value={cashAmount} onChange={e => setCashAmount(e.target.value)} style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '14px', boxSizing: 'border-box' }} />
+            
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setCashModalVisible(false)} style={{ flex: 1, padding: '9px', backgroundColor: '#f1f5f9', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px' }}>Cancel</button>
-              <button onClick={submitCashPayment} style={{ flex: 1, padding: '9px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px' }}>Save Receipt</button>
+              <button onClick={() => setCashModalVisible(false)} style={{ flex: 1, padding: '10px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={submitCashPayment} style={{ flex: 1, padding: '10px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px', textTransform: 'uppercase', cursor: 'pointer' }}>Save Receipt</button>
             </div>
           </div>
         </div>
