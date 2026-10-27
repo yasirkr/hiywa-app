@@ -33,7 +33,8 @@ function MainAppContent() {
     if (Platform.OS === 'web') {
       const handleWebBack = () => {
         if (currentView === 'login') return;
-        if (currentView === 'home' || currentView === 'admin_stats') {
+        // Only the actual 'home' view triggers the double-tap to exit warning now
+        if (currentView === 'home') {
           window.history.pushState(null, '', window.location.href);
           if (backPressCount.current === 0) {
             backPressCount.current = 1;
@@ -44,10 +45,12 @@ function MainAppContent() {
           }
           return;
         }
+        
+        // Everything else safely returns to 'home' (the Workspace)
         if (currentView === 'register') setCurrentView('login');
         else if (currentView === 'campaignDetail') setCurrentView('fundraising');
         else if (currentView === 'receipt') setCurrentView(receiptBackView);
-        else setCurrentView('home');
+        else setCurrentView('home'); 
       };
       window.history.pushState(null, '', window.location.href);
       window.addEventListener('popstate', handleWebBack);

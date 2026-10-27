@@ -574,36 +574,44 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
 
             {/* QUICK SERVICES */}
             <h3 style={{ margin: '14px 0 8px 2px', fontSize: '10px', color: '#0f172a', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Quick Services</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+              
+              {/* DONATE MOVED TO 1ST POSITION */}
+              <div onClick={() => setShowDonatePayModal(true)} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                <span style={{ fontSize: '20px' }}>💖</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Donate</span>
+              </div>
+
               {currentUser?.role !== 'STUDENT' && (
-                <div onClick={() => onNavigate('subscription')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                <div onClick={() => onNavigate('subscription')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                   <span style={{ fontSize: '20px' }}>📅</span>
-                  <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Subscription</span>
+                  <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Subscription</span>
                 </div>
               )}
-              <div onClick={() => setShowDonatePayModal(true)} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-                <span style={{ fontSize: '20px' }}>💖</span>
-                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Donate</span>
-              </div>
-              <div onClick={() => onNavigate('fundraising')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+              
+              <div onClick={() => onNavigate('fundraising')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>📢</span>
-                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Fund Drives</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Fund Drives</span>
               </div>
-              <div onClick={() => onNavigate('blood')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-                <span style={{ fontSize: '20px' }}>🩸</span>
-                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Blood Group</span>
-              </div>
-              <div onClick={() => onNavigate('governing')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-                <span style={{ fontSize: '20px' }}>🏛️</span>
-                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Gov. Body</span>
-              </div>
-              <div onClick={() => onNavigate('my_contributions')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+              
+              <div onClick={() => onNavigate('my_contributions')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>📊</span>
-                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>My Contribs</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>My Contribs</span>
               </div>
-              <div onClick={() => onNavigate('ramadan')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+
+              <div onClick={() => onNavigate('blood')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                <span style={{ fontSize: '20px' }}>🩸</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Blood Group</span>
+              </div>
+              
+              <div onClick={() => onNavigate('governing')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                <span style={{ fontSize: '20px' }}>🏛️</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Gov. Body</span>
+              </div>
+
+              <div onClick={() => onNavigate('ramadan')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>🌙</span>
-                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Ramadan</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Ramadan</span>
               </div>
             </div>
 
@@ -1163,11 +1171,11 @@ export function UserProfileScreen({ currentUser, setCurrentUser }) {
               </div>
               {[
                 ['Official ID', currentUser?.official_id],
-                ['Status & Role', `${currentUser?.membership_status} • ${currentUser?.role}`],
+                ['Status & Role', `${currentUser?.membership_status} • ${currentUser?.role === 'ADMIN' ? 'MEMBER' : currentUser?.role}`],
                 ['DOB & Gender', `${currentUser?.dob || 'N/A'} • ${currentUser?.gender || 'N/A'}`],
                 ['Blood & Marital', `${currentUser?.blood_group || 'N/A'} • ${currentUser?.marital_status || 'N/A'}`],
                 ['Parents Status', currentUser?.parents_status],
-                ['Aadhaar Number', currentUser?.aadhaar_number ? 'Stored (12 Digits)' : 'N/A'],
+                ['Aadhaar Number', currentUser?.aadhaar_number || 'N/A'],
                 ['Primary Mobile', `${currentUser?.country_code || '+91'} ${currentUser?.phone_number || ''}`],
                 ['WhatsApp', `${currentUser?.country_code || '+91'} ${currentUser?.whatsapp_number || ''}`],
                 ['Email', currentUser?.email],

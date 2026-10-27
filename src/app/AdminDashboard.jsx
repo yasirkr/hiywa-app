@@ -762,7 +762,21 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               )}
             </div>
 
-            <button onClick={async () => { await updateDoc(doc(db, 'members', u.official_id), editFormData); alert('Member Profile Updated!'); setIsEditingUser(false); setSelectedDetailUser({ ...u, ...editFormData }); fetchData(); }} style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer', marginTop: '6px' }}>💾 Save All Member Changes</button>
+            <button
+              onClick={async () => {
+                const updatedUser = { ...u, ...editFormData };
+                // INSTANT UI UPDATE
+                setDirectory(prev => prev.map(m => m.official_id === u.official_id ? updatedUser : m));
+                setSelectedDetailUser(updatedUser);
+                setIsEditingUser(false);
+                try {
+                  await updateDoc(doc(db, 'members', u.official_id), editFormData);
+                } catch (e) {}
+              }}
+              style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer', marginTop: '6px' }}
+            >
+              💾 Save All Member Changes
+            </button>
           </div>
         ) : (
           <div>
@@ -776,12 +790,11 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                 )}
               </div>
               <div style={{ flex: 1 }}>
-                <h3 style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: '900', color: '#0f172a' }}>{u.full_name} {u.is_core_admin ? '👑' : ''}</h3>
+                <h3 style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: '900', color: '#0f172a' }}>{u.full_name}</h3>
                 <p style={{ margin: '0 0 4px 0', fontSize: '9.5px', color: '#64748b', fontWeight: '800' }}>ID: {u.official_id} • S/O {u.father_name}</p>
-                <span style={{ backgroundColor: u.membership_status === 'ACTIVE' ? '#dcfce7' : '#fee2e2', color: u.membership_status === 'ACTIVE' ? '#16a34a' : '#dc2626', padding: '2px 7px', borderRadius: '5px', fontSize: '8px', fontWeight: '900' }}>{u.membership_status} • {u.role}</span>
+                <span style={{ backgroundColor: u.membership_status === 'ACTIVE' ? '#dcfce7' : '#fee2e2', color: u.membership_status === 'ACTIVE' ? '#16a34a' : '#dc2626', padding: '2px 7px', borderRadius: '5px', fontSize: '8px', fontWeight: '900' }}>{u.membership_status} • {u.role === 'ADMIN' ? 'MEMBER' : u.role}</span>
               </div>
             </div>
-
 
             {/* Full Member Details Table */}
             {[
@@ -789,7 +802,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               ['Parents Status', u.parents_status],
               ['DOB & Gender', `${u.dob || 'N/A'} • ${u.gender || 'N/A'}`],
               ['Blood & Marital', `${u.blood_group || 'N/A'} • ${u.marital_status || 'N/A'}`],
-              ['Aadhaar Number', u.aadhaar_number ? '[AADHAAR RECORDED]' : 'N/A'],
+              ['Aadhaar Number', u.aadhaar_number || 'N/A'],
               ['Primary Mobile', `${u.country_code || '+91'} ${u.phone_number || ''}`],
               ['WhatsApp', `${u.country_code || '+91'} ${u.whatsapp_number || ''}`],
               ['Email', u.email],
@@ -798,7 +811,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               ['Education', `${u.educational_qualification || u.class_grade || 'N/A'} (${u.course_details || u.school_name || ''})`],
               ['Occupation', u.occupation],
               ['Islamic Studies', u.islamic_studies === 'YES' ? `${u.islamic_qualification} (${u.madrasa_name || ''})` : 'NO'],
-              ['Months Paid', `${u.total_months_paid || 0} Months`],
+              ['Subscription Active', u.subscription_started ? 'YES (TRACKED)' : 'NO (PAUSED)'],
               ['Address', u.address]
             ].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f8fafc', fontSize: '10.5px' }}>
@@ -909,9 +922,14 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               </div>
             )}
 
-            {/* 2. MEMBER & STUDENT DIRECTORY (ONLY EDIT PROFILE ICON ON RIGHT) */}
+            {/* 2. MEMBER & STUDENT DIRECTORY */}
             {(activeTab === 'USERS' || activeTab === 'STUDENTS') && (
               <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>
+                    Total {activeTab === 'USERS' ? 'Members' : 'Students'}: {filteredDirectory.length}
+                  </h3>
+                </div>
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
                   <input type="text" placeholder="Search Name..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, padding: '9px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none' }} />
                   <button onClick={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')} style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '0 12px', borderRadius: '10px', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add</button>
@@ -927,22 +945,9 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                           <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#0a192f', color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '13px' }}>{m.full_name?.charAt(0)}</div>
                         )}
                         <div style={{ flex: 1 }}>
-                          <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{m.full_name} {m.is_core_admin ? '👑' : ''}</p>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{m.full_name}</p>
                           <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>{relPrefix} {m.father_name}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDetailUser(m);
-                            setEditFormData(m);
-                            setIsEditingUser(true);
-                          }}
-                          title="Edit Profile"
-                          style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}
-                        >
-                          ✏️
-                        </button>
                       </div>
                     );
                   })}
