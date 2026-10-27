@@ -20,6 +20,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [systemLogs, setSystemLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
 
   const logAdminEvent = async (action, details) => {
     try {
@@ -86,6 +87,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [campTarget, setCampTarget] = useState('');
   const [campStatus, setCampStatus] = useState('ACTIVE');
   const [viewCampDonors, setViewCampDonors] = useState(null);
+  const [viewMemberContrib, setViewMemberContrib] = useState(null);
 
   const [statusRemarkModal, setStatusRemarkModal] = useState(null); // { camp, targetStatus }
   const [statusRemarkText, setStatusRemarkText] = useState('');
@@ -1197,6 +1199,96 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                 </div>
               </div>
             )}
+
+            {/* CONTRIBUTIONS (LEADERBOARD & SPLIT) */}
+            {activeTab === 'CONTRIBUTIONS' && (() => {
+              const allTrustTotal = allIncomes.reduce((s, t) => s + Number(t.amount || 0), 0);
+              const allTrustSub = allIncomes.filter(t => t.donation_type === 'SUBSCRIPTION').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const allTrustCamp = allIncomes.filter(t => t.donation_type === 'FUND_RAISING' || t.donation_type === 'CAMPAIGN').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const allTrustGen = allIncomes.filter(t => t.donation_type === 'GENERAL').reduce((s, t) => s + Number(t.amount || 0), 0);
+
+              let memberContribs = {};
+              allIncomes.forEach(t => {
+                const mid = t.member_id || 'UNKNOWN';
+                if (!memberContribs[mid]) memberContribs[mid] = { official_id: mid, full_name: t.full_name || 'Guest', total: 0, sub: 0, camp: 0, gen: 0 };
+                const amt = Number(t.amount || 0);
+                memberContribs[mid].total += amt;
+                if (t.donation_type === 'SUBSCRIPTION') memberContribs[mid].sub += amt;
+                else if (t.donation_type === 'FUND_RAISING' || t.donation_type === 'CAMPAIGN') memberContribs[mid].camp += amt;
+                else memberContribs[mid].gen += amt;
+              });
+              const memberContribList = Object.values(memberContribs).sort((a, b) => b.total - a.total);
+
+              return (
+                <div>
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '16px', border: '1px solid #cbd5e1', marginBottom: '14px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: '10px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Total Trust Collections</span>
+                      <h2 style={{ margin: '4px 0 0 0', fontSize: '26px', fontWeight: '900', color: '#1e3a8a' }}>₹{allTrustTotal.toLocaleString()}</h2>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Subscriptions</span><span style={{ fontSize: '13px', fontWeight: '900', color: '#10b981' }}>₹{allTrustSub.toLocaleString()}</span></div>
+                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Fund Drives</span><span style={{ fontSize: '13px', fontWeight: '900', color: '#d97706' }}>₹{allTrustCamp.toLocaleString()}</span></div>
+                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>General/Other</span><span style={{ fontSize: '13px', fontWeight: '900', color: '#0f172a' }}>₹{allTrustGen.toLocaleString()}</span></div>
+                    </div>
+                  </div>
+
+                  <h3 style={{ margin: '0 0 8px 4px', fontSize: '11px', color: '#0f172a', fontWeight: '900', textTransform: 'uppercase' }}>Member Leaderboard</h3>
+                  <input type="text" placeholder="Search Member Name..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', marginBottom: '10px' }} />
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {memberContribList.filter(m => !searchQuery || m.full_name?.toLowerCase().includes(searchQuery.toLowerCase())).map((m, idx) => (
+                      <div key={m.official_id} onClick={() => setViewMemberContrib(m)} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: '#eff6ff', color: '#1e3a8a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '900' }}>#{idx + 1}</div>
+                          <div>
+                            <p style={{ margin: '0 0 2px 0', fontSize: '11.5px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{m.full_name}</p>
+                            <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>{m.official_id}</p>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '13px', fontWeight: '900', color: '#10b981' }}>₹{m.total.toLocaleString()}</p>
+                          <p style={{ margin: 0, fontSize: '8.5px', color: '#1e3a8a', fontWeight: '800', textTransform: 'uppercase' }}>View Split →</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* POPUP MODAL FOR INDIVIDUAL MEMBER CONTRIBUTION SPLIT */}
+                  {viewMemberContrib && (
+                    <div onClick={() => setViewMemberContrib(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)' }}>
+                      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '300px', backgroundColor: '#ffffff', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid #cbd5e1' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #0a192f 0%, #1e3a8a 100%)', padding: '18px 16px', textAlign: 'center', position: 'relative' }}>
+                          <button onClick={() => setViewMemberContrib(null)} style={{ position: 'absolute', top: '10px', right: '10px', backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', width: '26px', height: '26px', borderRadius: '50%', fontSize: '11px', fontWeight: '900', cursor: 'pointer' }}>✕</button>
+                          <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.12)', color: '#fbbf24', fontSize: '24px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto', border: '1.5px solid #fbbf24' }}>
+                            {viewMemberContrib.full_name?.charAt(0)}
+                          </div>
+                          <h3 style={{ margin: '0 0 2px 0', fontSize: '14px', fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>{viewMemberContrib.full_name}</h3>
+                          <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd', fontWeight: '700', textTransform: 'uppercase' }}>{viewMemberContrib.official_id}</p>
+                        </div>
+                        <div style={{ padding: '16px' }}>
+                          <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Total Contributed</span>
+                            <h2 style={{ margin: '2px 0 0 0', fontSize: '24px', fontWeight: '900', color: '#10b981' }}>₹{viewMemberContrib.total.toLocaleString()}</h2>
+                          </div>
+                          {[
+                            ['Subscriptions', viewMemberContrib.sub, '📅'],
+                            ['Fund Drives', viewMemberContrib.camp, '📢'],
+                            ['General / Other', viewMemberContrib.gen, '💖']
+                          ].map(([k, v, icon]) => (
+                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                              <span style={{ color: '#475569', fontWeight: '800', fontSize: '10px', textTransform: 'uppercase' }}>{icon} {k}</span>
+                              <span style={{ color: '#0f172a', fontWeight: '900', fontSize: '11px' }}>₹{v.toLocaleString()}</span>
+                            </div>
+                          ))}
+                          <button onClick={() => setViewMemberContrib(null)} style={{ width: '100%', marginTop: '16px', padding: '11px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}>Close</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* 4. ENHANCED CAMPAIGNS CONTROL TAB */}
             {activeTab === 'CAMPAIGNS' && (

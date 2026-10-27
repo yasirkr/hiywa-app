@@ -360,16 +360,13 @@ export function GoverningBodyScreen({ currentUser, onBack }) {
 // ==========================================
 // 2. USER HOME DASHBOARD (WITH ADMIN MODE TOGGLE)
 // ==========================================
-export function HomeScreen({ currentUser, onNavigate, onLogout }) {
+export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAdminMode }) {
   const [activeCampaigns, setActiveCampaigns] = useState([]);
   const [subStartMonth, setSubStartMonth] = useState('');
   const [customSlider, setCustomSlider] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showDonatePayModal, setShowDonatePayModal] = useState(false);
-  
-  // NEW STATE: Admin Mode Toggle
-  const [adminMode, setAdminMode] = useState(false); 
 
   const fallbackImages = ['https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&q=80&w=1200'];
   const activeSlider = customSlider.length > 0 ? customSlider : fallbackImages;
@@ -505,6 +502,7 @@ export function HomeScreen({ currentUser, onNavigate, onLogout }) {
               <AdminHomeTile id="FINANCE" icon="💵" label="Finance" perm="MANAGE_FINANCE" />
               <AdminHomeTile id="CAMPAIGNS" icon="📢" label="Causes" perm="MANAGE_CAMPAIGNS" />
               <AdminHomeTile id="REPORTS" icon="📑" label="Reports" perm="REPORTS_CENTRAL" />
+              <AdminHomeTile id="CONTRIBUTIONS" icon="📈" label="Contribs" perm="REPORTS_CENTRAL" />
               <AdminHomeTile id="ACTIONS" icon="⚡" label="Actions" perm="ALL" />
               <AdminHomeTile id="ROLES" icon="🛡️" label="Roles" perm="ALL" />
               <AdminHomeTile id="EVENTS" icon="📜" label="Logs" perm="ALL" />
@@ -598,6 +596,10 @@ export function HomeScreen({ currentUser, onNavigate, onLogout }) {
               <div onClick={() => onNavigate('governing')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>🏛️</span>
                 <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Gov. Body</span>
+              </div>
+              <div onClick={() => onNavigate('my_contributions')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                <span style={{ fontSize: '20px' }}>📊</span>
+                <span style={{ fontSize: '8.5px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>My Contribs</span>
               </div>
               <div onClick={() => onNavigate('ramadan')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 6px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>🌙</span>
@@ -1345,6 +1347,75 @@ export function RamadanScreen({ onBack }) {
         <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '900', color: '#d97706', textTransform: 'uppercase' }}>Ramadan Competition</h3>
         <p style={{ margin: '0 0 14px 0', fontSize: '11px', color: '#b45309', fontWeight: '600', lineHeight: '1.4' }}>The HIYWA Ramadan Competition portal will open prior to the upcoming holy month of Ramadan.</p>
         <button onClick={onBack} style={{ padding: '8px 16px', backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>← Return Home</button>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 8. MY CONTRIBUTIONS SCREEN
+// ==========================================
+export function MyContributionScreen({ currentUser, onViewReceipt, onBack }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'transactions'));
+        const userTxns = snap.docs.map(d => d.data()).filter(t => t.member_id === currentUser.official_id);
+        setHistory(userTxns.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)));
+      } catch (e) {} finally { setLoading(false); }
+    };
+    fetchHistory();
+  }, [currentUser]);
+
+  const subTotal = history.filter(t => t.donation_type === 'SUBSCRIPTION').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const campTotal = history.filter(t => t.donation_type === 'FUND_RAISING' || t.donation_type === 'CAMPAIGN').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const genTotal = history.filter(t => t.donation_type === 'GENERAL').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const grandTotal = subTotal + campTotal + genTotal;
+
+  return (
+    <div>
+      <div style={{ background: 'linear-gradient(135deg, #0a192f 0%, #1e3a8a 100%)', padding: '14px 16px 48px 16px', borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>My Contributions</h2>
+            <p style={{ margin: '2px 0 0 0', color: '#fbbf24', fontSize: '8.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Lifetime Giving History</p>
+          </div>
+          <button onClick={onBack} style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', padding: '6px 10px', borderRadius: '8px', color: '#ffffff', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>← Back</button>
+        </div>
+      </div>
+
+      <div style={{ padding: '0 14px', maxWidth: '600px', margin: '-32px auto 0 auto', position: 'relative', zIndex: 10 }}>
+        {/* Split up cards */}
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+          <div style={{ textAlign: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: '9px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Total Contributions</span>
+            <h2 style={{ margin: '4px 0 0 0', fontSize: '26px', fontWeight: '900', color: '#1e3a8a' }}>₹{grandTotal.toLocaleString()}</h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+            <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Subscriptions</span><span style={{ fontSize: '13px', fontWeight: '900', color: '#10b981' }}>₹{subTotal.toLocaleString()}</span></div>
+            <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Fund Drives</span><span style={{ fontSize: '13px', fontWeight: '900', color: '#d97706' }}>₹{campTotal.toLocaleString()}</span></div>
+            <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>General / Other</span><span style={{ fontSize: '13px', fontWeight: '900', color: '#0f172a' }}>₹{genTotal.toLocaleString()}</span></div>
+          </div>
+        </div>
+
+        <h3 style={{ margin: '0 0 8px 4px', fontSize: '11px', color: '#0f172a', fontWeight: '900', textTransform: 'uppercase' }}>Transaction History</h3>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '4px', border: '1px solid #cbd5e1' }}>
+          {loading ? <p style={{ padding: '14px', textAlign: 'center', fontSize: '10px', color: '#94a3b8' }}>Loading...</p> : history.length === 0 ? <p style={{ padding: '14px', textAlign: 'center', fontSize: '10px', color: '#94a3b8', fontWeight: '700', margin: 0 }}>No contributions yet.</p> : history.map((txn, idx) => (
+            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 10px', borderBottom: idx === history.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
+              <div>
+                <p style={{ margin: '0 0 2px 0', fontSize: '10.5px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{txn.reason || txn.donation_type}</p>
+                <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>{new Date(txn.transaction_date).toLocaleDateString('en-GB')} • {txn.payment_method}</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '900', color: '#10b981' }}>₹{txn.amount}</span>
+                <button onClick={() => onViewReceipt(txn)} style={{ backgroundColor: '#eff6ff', color: '#1e3a8a', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: '800', cursor: 'pointer', textTransform: 'uppercase' }}>📄 Slip</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
