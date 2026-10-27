@@ -55,6 +55,8 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [selectedActionChoice, setSelectedActionChoice] = useState('');
   const [editFormData, setEditFormData] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionModal, setActionModal] = useState(null); // Controls the Action Selection Modal
+  const [actionSearchQuery, setActionSearchQuery] = useState('');
 
   // Finance & Cash Modals
   const [finSearchQuery, setFinSearchQuery] = useState('');
@@ -150,6 +152,36 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
     setViewClosedCamp(null);
     fetchData();
   }, [activeTab]);
+
+  // EXECUTING ACTIONS FROM THE ACTIONS PAGE & MODALS
+  const executeAdminAction = async (u, actionType) => {
+    const uid = u.official_id;
+    try {
+      if (actionType === 'START_SUB') {
+        await updateDoc(doc(db, 'members', uid), { subscription_started: true, subscription_start_date: new Date().toISOString() });
+        logAdminEvent('Started Subscription', uid);
+        alert(`Success: Subscription started for ${u.full_name}!`);
+      } else if (actionType === 'RESET') {
+        await updateDoc(doc(db, 'members', uid), { password: 'Hiywa@123' });
+        logAdminEvent('Reset Password', uid);
+        alert(`Success: Password reset to Hiywa@123 for ${u.full_name}`);
+      } else if (actionType === 'DEACTIVATE' || actionType === 'ACTIVATE') {
+        const nextStatus = actionType === 'ACTIVATE' ? 'ACTIVE' : 'INACTIVE';
+        await updateDoc(doc(db, 'members', uid), { membership_status: nextStatus });
+        logAdminEvent(`Status ${nextStatus}`, uid);
+        alert(`Success: ${u.full_name} status updated to ${nextStatus}`);
+      } else if (actionType === 'DECEASED') {
+        await updateDoc(doc(db, 'members', uid), { membership_status: 'DECEASED' });
+        logAdminEvent('Marked Deceased', uid);
+        alert(`Success: ${u.full_name} marked as Deceased.`);
+      } else if (actionType === 'UPGRADE') {
+        await updateDoc(doc(db, 'members', uid), { role: 'MEMBER' });
+        logAdminEvent('Upgraded Student', uid);
+        alert(`Success: ${u.full_name} upgraded from Student to Member!`);
+      }
+      fetchData();
+    } catch (e) { alert('Action failed: ' + e.message); }
+  };
 
   // Financial & Dues Computations
   const allIncomes = globalTxns.filter(t => t.donation_type !== 'EXPENSE');
@@ -986,115 +1018,44 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               </div>
             )}
 
-            {/* 2A. DEDICATED ADMIN ACTIONS PAGE (RESET PASSWORD, DEACTIVATE, MARK DECEASED, UPGRADE STUDENT) */}
+            {/* 2A. REVERSE FLOW ADMIN ACTIONS PAGE */}
             {activeTab === 'ACTIONS' && (
               <div>
-                <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>⚡ Member & Student Account Actions</h4>
-                  <p style={{ margin: '0 0 10px 0', fontSize: '9.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
-                    Reset Password • Activate / Deactivate • Mark Deceased • Upgrade Student
-                  </p>
-                  <input
-                    type="text"
-                    placeholder="Search Member or Student Name / ID..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
-                  />
+                {/* TOP ACTION GRID */}
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '11px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚡ Execute Action</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    <button onClick={() => setActionModal('START_SUB')} style={{ padding: '14px 8px', backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>📅</span> Start Sub</button>
+                    <button onClick={() => setActionModal('RESET')} style={{ padding: '14px 8px', backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>🔑</span> Reset Pass</button>
+                    <button onClick={() => setActionModal('DEACTIVATE')} style={{ padding: '14px 8px', backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>🚫</span> Deactivate</button>
+                    <button onClick={() => setActionModal('UPGRADE')} style={{ padding: '14px 8px', backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>🎓</span> Upgrade</button>
+                    <button onClick={() => setActionModal('DECEASED')} style={{ gridColumn: 'span 2', padding: '14px 8px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>⚰️</span> Mark Deceased</button>
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {directory
-                    .filter(u => !u.is_core_admin)
-                    .filter(u => !searchQuery || u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map(u => {
-                      const relPrefix = u.gender === 'FEMALE' ? 'D/O' : 'S/O';
-                      return (
-                        <div key={u.official_id} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                              {u.profile_photo ? (
-                                <img src={u.profile_photo} alt="" style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
-                              ) : (
-                                <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#0a192f', color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '13px', flexShrink: 0 }}>
-                                  {u.full_name?.charAt(0)}
-                                </div>
-                              )}
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {u.full_name}
-                                </p>
-                                <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>
-                                  {u.official_id} • {relPrefix} {u.father_name}
-                                </p>
-                              </div>
+                {/* INACTIVE & DECEASED LISTS */}
+                {['INACTIVE', 'DECEASED'].map(status => {
+                  const list = directory.filter(u => u.membership_status === status);
+                  if (list.length === 0) return null;
+                  return (
+                    <div key={status} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px' }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '11px', fontWeight: '900', color: status === 'INACTIVE' ? '#c2410c' : '#475569', textTransform: 'uppercase' }}>{status === 'INACTIVE' ? '🚫 Deactivated Accounts' : '⚰️ Deceased Records'} ({list.length})</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {list.map(u => (
+                          <div key={u.official_id} onClick={() => {
+                            if (window.confirm(`Re-activate ${u.full_name}?`)) executeAdminAction(u, 'ACTIVATE');
+                          }} style={{ backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                            <div>
+                              <p style={{ margin: '0 0 2px 0', fontSize: '11.5px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{u.full_name}</p>
+                              <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '800' }}>{u.official_id}</p>
                             </div>
-                            <span style={{ backgroundColor: u.membership_status === 'ACTIVE' ? '#dcfce7' : u.membership_status === 'DECEASED' ? '#e2e8f0' : '#fee2e2', color: u.membership_status === 'ACTIVE' ? '#16a34a' : u.membership_status === 'DECEASED' ? '#475569' : '#dc2626', padding: '3px 7px', borderRadius: '6px', fontSize: '8px', fontWeight: '900', textTransform: 'uppercase', flexShrink: 0 }}>
-                              {u.membership_status} • {u.role}
-                            </span>
+                            <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0', padding: '5px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase' }}>⚡ Activate</span>
                           </div>
-
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await updateDoc(doc(db, 'members', u.official_id), { password: 'Hiywa@123' });
-                                logAdminEvent('Reset Password', u.official_id);
-                                alert(`Password reset to Hiywa@123 for ${u.full_name}`);
-                              }}
-                              style={{ flex: '1 1 110px', padding: '7px 8px', backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-                            >
-                              🔑 Reset Password
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const next = u.membership_status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-                                await updateDoc(doc(db, 'members', u.official_id), { membership_status: next });
-                                logAdminEvent(`Status ${next}`, u.official_id);
-                                alert(`${u.full_name} status updated to ${next}`);
-                                fetchData();
-                              }}
-                              style={{ flex: '1 1 110px', padding: '7px 8px', backgroundColor: u.membership_status === 'ACTIVE' ? '#fff7ed' : '#f0fdf4', color: u.membership_status === 'ACTIVE' ? '#c2410c' : '#15803d', border: u.membership_status === 'ACTIVE' ? '1px solid #fed7aa' : '1px solid #bbf7d0', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-                            >
-                              {u.membership_status === 'ACTIVE' ? '🚫 Deactivate' : '⚡ Activate'}
-                            </button>
-
-                            {u.membership_status !== 'DECEASED' && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await updateDoc(doc(db, 'members', u.official_id), { membership_status: 'DECEASED' });
-                                  logAdminEvent('Marked Deceased', u.official_id);
-                                  alert(`${u.full_name} marked as Deceased.`);
-                                  fetchData();
-                                }}
-                                style={{ flex: '1 1 110px', padding: '7px 8px', backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-                              >
-                                ⚰️ Mark Deceased
-                              </button>
-                            )}
-
-                            {u.role === 'STUDENT' && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await updateDoc(doc(db, 'members', u.official_id), { role: 'MEMBER' });
-                                  logAdminEvent('Upgraded Student', u.official_id);
-                                  alert(`${u.full_name} upgraded from Student to Member!`);
-                                  fetchData();
-                                }}
-                                style={{ flex: '1 1 130px', padding: '7px 8px', backgroundColor: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
-                              >
-                                🎓 Upgrade Student
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -1205,43 +1166,50 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
 
               return (
               <div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                  <button onClick={() => { setIsGuestDonation(true); setCashAmount(''); setCashReason(''); setGuestName(''); setDonationMember(''); setShowLogDonationModal(true); }} style={{ flex: 1, padding: '10px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Log Donation</button>
-                  <button onClick={() => setExpenseModalVisible(true)} style={{ flex: 1, padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Log Expense</button>
+                {/* 1. TOP PROMINENT NET BALANCE CARD */}
+                <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0a192f 100%)', color: '#ffffff', borderRadius: '18px', padding: '18px', marginBottom: '10px', textAlign: 'center', boxShadow: '0 6px 16px rgba(10,25,47,0.15)', border: '1px solid #3b82f6' }}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', color: '#93c5fd' }}>Net Trust Balance</p>
+                  <h2 style={{ margin: 0, fontSize: '32px', fontWeight: '900', letterSpacing: '0.5px' }}>₹{currentBalance.toLocaleString()}</h2>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-                  {/* Income Split Card */}
-                  <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>Total Income</span>
-                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#10b981' }}>₹{(totalIncomeVal + Number(initialAmount)).toLocaleString()}</span>
+                {/* 2. INCOME & EXPENSE (SIDE-BY-SIDE CARDS) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                  
+                  {/* INCOME CARD */}
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px 12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ textAlign: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px', marginBottom: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '9px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Income</span>
+                      <span style={{ fontSize: '16px', fontWeight: '900', color: '#10b981' }}>₹{(totalIncomeVal + Number(initialAmount)).toLocaleString()}</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center' }}>
-                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Subscriptions</span><span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a' }}>₹{incSub.toLocaleString()}</span></div>
-                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Fund Drives</span><span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a' }}>₹{incCamp.toLocaleString()}</span></div>
-                      <div><span style={{ display: 'block', fontSize: '8px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Gen / Init</span><span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a' }}>₹{(incGen + Number(initialAmount)).toLocaleString()}</span></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '9px', fontWeight: '800', color: '#64748b' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>SUBS:</span> <span style={{ color: '#0f172a' }}>₹{incSub.toLocaleString()}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>DRIVES:</span> <span style={{ color: '#0f172a' }}>₹{incCamp.toLocaleString()}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>GEN / INIT:</span> <span style={{ color: '#0f172a' }}>₹{(incGen + Number(initialAmount)).toLocaleString()}</span></div>
                     </div>
                   </div>
 
-                  {/* Expense Split & Balance Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #f1f5f9' }}>
-                        <span style={{ fontSize: '10px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>Total Exp</span>
-                        <span style={{ fontSize: '14px', fontWeight: '900', color: '#ef4444' }}>₹{totalExpenseVal.toLocaleString()}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontWeight: '800', color: '#475569' }}>
-                        <span>Office: <span style={{ color: '#0f172a' }}>₹{(expOffice + expOther).toLocaleString()}</span></span>
-                        <span>Charity: <span style={{ color: '#0f172a' }}>₹{expCharity.toLocaleString()}</span></span>
-                      </div>
+                  {/* EXPENSE CARD */}
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px 12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ textAlign: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px', marginBottom: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '9px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Expense</span>
+                      <span style={{ fontSize: '16px', fontWeight: '900', color: '#ef4444' }}>₹{totalExpenseVal.toLocaleString()}</span>
                     </div>
-                    
-                    <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '12px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                      <span style={{ fontSize: '10px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', marginBottom: '4px' }}>Net Balance</span>
-                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#1e3a8a' }}>₹{currentBalance.toLocaleString()}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '9px', fontWeight: '800', color: '#64748b' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>OFFICE:</span> <span style={{ color: '#0f172a' }}>₹{(expOffice + expOther).toLocaleString()}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CHARITY:</span> <span style={{ color: '#0f172a' }}>₹{expCharity.toLocaleString()}</span></div>
                     </div>
                   </div>
+
+                </div>
+
+                {/* 3. LOG BUTTONS (MOVED BELOW BALANCE/STATS) */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                  <button onClick={() => { setIsGuestDonation(true); setCashAmount(''); setCashReason(''); setGuestName(''); setDonationMember(''); setShowLogDonationModal(true); }} style={{ flex: 1, padding: '11px', backgroundColor: '#1e3a8a', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(30,58,138,0.2)' }}>
+                    + Log Donation
+                  </button>
+                  <button onClick={() => setExpenseModalVisible(true)} style={{ flex: 1, padding: '11px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(220,38,38,0.2)' }}>
+                    + Log Expense
+                  </button>
                 </div>
 
                 <div style={{ display: 'flex', backgroundColor: '#e2e8f0', padding: '3px', borderRadius: '10px', marginBottom: '10px' }}>
@@ -1775,6 +1743,47 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
           </div>
         </div>
       )}
+
+      {/* ACTION SELECTION MODAL */}
+      {actionModal && (() => {
+        let eligibleUsers = directory.filter(u => !u.is_core_admin);
+        let title = '';
+        if (actionModal === 'START_SUB') { title = 'Start Subscription'; eligibleUsers = eligibleUsers.filter(u => u.role !== 'STUDENT' && u.membership_status === 'ACTIVE' && !u.subscription_started); }
+        else if (actionModal === 'RESET') { title = 'Reset Password'; eligibleUsers = eligibleUsers.filter(u => u.membership_status === 'ACTIVE'); }
+        else if (actionModal === 'DEACTIVATE') { title = 'Deactivate Account'; eligibleUsers = eligibleUsers.filter(u => u.membership_status === 'ACTIVE'); }
+        else if (actionModal === 'UPGRADE') { title = 'Upgrade Student'; eligibleUsers = eligibleUsers.filter(u => u.role === 'STUDENT' && u.membership_status === 'ACTIVE'); }
+        else if (actionModal === 'DECEASED') { title = 'Mark Deceased'; eligibleUsers = eligibleUsers.filter(u => u.membership_status !== 'DECEASED'); }
+
+        const filteredList = eligibleUsers.filter(u => !actionSearchQuery || u.full_name?.toLowerCase().includes(actionSearchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(actionSearchQuery.toLowerCase()));
+
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.7)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)', overflowY: 'auto' }}>
+            <div style={{ width: '100%', maxWidth: '340px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '18px', marginTop: '40px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>{title}</h4>
+                <button onClick={() => { setActionModal(null); setActionSearchQuery(''); }} style={{ background: '#f1f5f9', border: 'none', width: '28px', height: '28px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer', color: '#475569' }}>✕</button>
+              </div>
+              <input type="text" placeholder="Search Member / Student..." value={actionSearchQuery} onChange={e => setActionSearchQuery(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '14px', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }} />
+              
+              <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {filteredList.length === 0 ? <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', fontWeight: '800', padding: '20px 0' }}>No eligible members found.</p> : filteredList.map(u => (
+                  <div key={u.official_id} onClick={() => {
+                    executeAdminAction(u, actionModal);
+                    setActionModal(null);
+                    setActionSearchQuery('');
+                  }} style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                    <div>
+                      <p style={{ margin: '0 0 2px 0', fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{u.full_name}</p>
+                      <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '800' }}>{u.official_id} • {u.role}</p>
+                    </div>
+                    <span style={{ backgroundColor: '#1e3a8a', color: '#fff', padding: '5px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase' }}>Select</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MASTER DATABASE WIPE MODAL */}
       {masterResetModal && (
