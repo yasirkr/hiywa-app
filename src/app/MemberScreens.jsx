@@ -404,14 +404,18 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
 
   let duesMonths = 0;
   const isFutureStart = subStartMonth && new Date(`${subStartMonth}-01`) > new Date();
-  const isSubsDisabled = !subStartMonth || isFutureStart;
+  
+  // Ensures dues ONLY calculate if the admin has explicitly started their subscription
+  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started;
 
   if (currentUser?.role !== 'STUDENT' && !isSubsDisabled) {
-    const joinDate = currentUser?.join_date ? new Date(currentUser.join_date) : new Date();
-    let startDate = joinDate;
+    // Uses individual start date if available, fallback to join date
+    const individualStart = currentUser?.subscription_start_date ? new Date(currentUser.subscription_start_date) : (currentUser?.join_date ? new Date(currentUser.join_date) : new Date());
+    let startDate = individualStart;
+    
     if (subStartMonth) {
       const systemStart = new Date(`${subStartMonth}-01`);
-      if (systemStart > joinDate) startDate = systemStart;
+      if (systemStart > individualStart) startDate = systemStart;
     }
     const now = new Date();
     const rawMonths = ((now.getFullYear() - startDate.getFullYear()) * 12) + (now.getMonth() - startDate.getMonth()) + 1;
@@ -427,8 +431,7 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
   }
 
   const AdminHomeTile = ({ id, icon, label, perm }) => {
-    if (perm !== 'PUBLIC' && !hasPerm(perm) && !isCore) return null;
-    if ((id === 'SETTINGS' || id === 'EVENTS' || id === 'ROLES' || id === 'ACTIONS') && !isCore) return null;
+    if (perm !== 'PUBLIC' && !hasPerm(perm)) return null;
     return (
       <div onClick={() => onNavigate(`admin_${id.toLowerCase()}`)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
         <div style={{ backgroundColor: '#ffffff', width: '46px', height: '46px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', border: '1px solid #cbd5e1', boxShadow: '0 2px 8px rgba(10,25,47,0.04)' }}>
@@ -783,11 +786,12 @@ export function SubscriptionScreen({ currentUser, onViewReceipt, onBack }) {
   if (isPageLoading) return <div style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}><div style={{ height: '120px', backgroundColor: '#e2e8f0', borderRadius: '18px' }}></div></div>;
 
   const isFutureStart = subStartMonth && new Date(`${subStartMonth}-01`) > new Date();
-  const isSubsDisabled = !subStartMonth || isFutureStart;
+  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started;
 
-  const joinDate = currentUser.join_date ? new Date(currentUser.join_date) : new Date();
-  let startDate = joinDate;
-  if (subStartMonth) { const systemStart = new Date(`${subStartMonth}-01`); if (systemStart > joinDate) startDate = systemStart; }
+  const individualStart = currentUser?.subscription_start_date ? new Date(currentUser.subscription_start_date) : (currentUser?.join_date ? new Date(currentUser.join_date) : new Date());
+  let startDate = individualStart;
+  
+  if (subStartMonth) { const systemStart = new Date(`${subStartMonth}-01`); if (systemStart > individualStart) startDate = systemStart; }
   const currentDate = new Date();
   const rawMonths = isSubsDisabled ? 0 : (((currentDate.getFullYear() - startDate.getFullYear()) * 12) + (currentDate.getMonth() - startDate.getMonth()) + 1);
   const totalPaid = parseInt(currentUser.total_months_paid) || 0;
@@ -881,20 +885,16 @@ export const DonationPortal = SubscriptionScreen;
 // ==========================================
 export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewReceipt, onBack }) {
   const [campaigns, setCampaigns] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [showPastModal, setShowPastModal] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const snap = await getDocs(collection(db, 'campaigns'));
         setCampaigns(snap.docs.map(d => d.data()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
-        const txnSnap = await getDocs(collection(db, 'transactions'));
-        setHistory(txnSnap.docs.map(d => d.data()).filter(t => t.member_id === currentUser.official_id && (t.donation_type === 'FUND_RAISING' || t.donation_type === 'CAMPAIGN')).sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)));
       } catch (err) {}
     };
     fetchData();
-  }, [currentUser]);
+  }, []);
 
   const activeCamps = campaigns.filter(c => (c.status === 'ACTIVE' || c.status === 'PAUSED') && (parseFloat(c.raised_amount) || 0) < (parseFloat(c.target_amount) || 1));
   const pastCamps = campaigns.filter(c => c.status === 'STOPPED' || (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1));
@@ -908,7 +908,7 @@ export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewRec
     const isPaused = camp.status === 'PAUSED';
 
     return (
-      <div key={camp.campaign_id} onClick={() => { setShowPastModal(false); onSelectCampaign(camp); }} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '10px', cursor: 'pointer' }}>
+      <div key={camp.campaign_id} onClick={() => onSelectCampaign(camp)} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
           <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{camp.title}</h4>
           <span style={{ backgroundColor: goalMet ? '#dcfce7' : isPaused ? '#fef3c7' : camp.status === 'STOPPED' ? '#fee2e2' : '#dbeafe', color: goalMet ? '#16a34a' : isPaused ? '#d97706' : camp.status === 'STOPPED' ? '#dc2626' : '#1e3a8a', padding: '2px 7px', borderRadius: '6px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase' }}>
@@ -937,47 +937,24 @@ export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewRec
             <h2 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>Fund Drives</h2>
             <p style={{ margin: '2px 0 0 0', color: '#fbbf24', fontSize: '8.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>Community Fundraising</p>
           </div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button onClick={() => setShowPastModal(true)} style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', padding: '5px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>Past ({pastCamps.length})</button>
-          </div>
+          <button onClick={onBack} style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', padding: '6px 12px', borderRadius: '8px', color: '#ffffff', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>← Back</button>
         </div>
       </div>
 
-      <div style={{ padding: '0 14px', maxWidth: '600px', margin: '-32px auto 0 auto', position: 'relative', zIndex: 10 }}>
+      <div style={{ padding: '0 14px', maxWidth: '600px', margin: '-32px auto 0 auto', position: 'relative', zIndex: 10, paddingBottom: '30px' }}>
         {activeCamps.length === 0 ? (
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', textAlign: 'center', border: '1px solid #cbd5e1', marginBottom: '16px' }}>
             <p style={{ margin: 0, fontSize: '10px', color: '#94a3b8', fontWeight: '700' }}>No active drives at the moment.</p>
           </div>
         ) : activeCamps.map(renderCard)}
 
-        <h3 style={{ margin: '16px 0 8px 2px', fontSize: '10px', color: '#0f172a', fontWeight: '900', textTransform: 'uppercase' }}>My Campaign Contributions</h3>
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '4px', border: '1px solid #cbd5e1' }}>
-          {history.length === 0 ? <p style={{ padding: '14px', textAlign: 'center', fontSize: '10px', color: '#94a3b8', fontWeight: '700', margin: 0 }}>No contributions yet.</p> : history.map((txn, idx) => (
-            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: idx === history.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
-              <div>
-                <p style={{ margin: '0 0 1px 0', fontSize: '10.5px', fontWeight: '900', color: '#0f172a' }}>{txn.reason}</p>
-                <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '700' }}>{new Date(txn.transaction_date).toLocaleDateString('en-GB')}</p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '900', color: '#10b981' }}>₹{txn.amount}</span>
-                <button onClick={() => onViewReceipt(txn)} style={{ backgroundColor: '#eff6ff', color: '#1e3a8a', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: '800', cursor: 'pointer' }}>📄 Slip</button>
-              </div>
-            </div>
-          ))}
-        </div>
+        {pastCamps.length > 0 && (
+          <>
+            <h3 style={{ margin: '16px 0 8px 2px', fontSize: '10px', color: '#0f172a', fontWeight: '900', textTransform: 'uppercase' }}>Closed / Past Drives</h3>
+            {pastCamps.map(renderCard)}
+          </>
+        )}
       </div>
-
-      {showPastModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#f8fafc', borderRadius: '20px', padding: '16px', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', textTransform: 'uppercase' }}>Past / Closed Drives</h4>
-              <button onClick={() => setShowPastModal(false)} style={{ background: '#fff', border: 'none', width: '26px', height: '26px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer' }}>✕</button>
-            </div>
-            {pastCamps.length === 0 ? <p style={{ fontSize: '10px', color: '#64748b' }}>No past drives.</p> : pastCamps.map(renderCard)}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1052,15 +1029,28 @@ export function UserProfileScreen({ currentUser, setCurrentUser }) {
     if (e && e.preventDefault) e.preventDefault();
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'members', currentUser.official_id), editForm);
-      await setDoc(doc(db, 'system_logs', `USR_${Date.now()}`), {
-        timestamp: new Date().toISOString(),
-        member_id: currentUser.official_id,
-        full_name: editForm.full_name || currentUser.full_name,
-        event_type: 'USER_EVENT',
-        action: 'Updated Profile Details',
-        details: `${editForm.full_name || currentUser.full_name} (${currentUser.official_id}) edited their profile.`
+      // 1. Calculate exactly which fields were changed
+      const changedFields = [];
+      Object.keys(editForm).forEach(key => {
+        if (editForm[key] !== currentUser[key] && key !== 'profile_photo') {
+          changedFields.push(key.replace(/_/g, ' ').toUpperCase());
+        }
       });
+
+      // 2. Update the user profile document
+      await updateDoc(doc(db, 'members', currentUser.official_id), editForm);
+      
+      // 3. Log the exact fields changed to system logs
+      if (changedFields.length > 0) {
+        await setDoc(doc(db, 'system_logs', `USR_${Date.now()}`), {
+          timestamp: new Date().toISOString(),
+          user_name: currentUser.full_name,
+          action: 'Updated Profile Details',
+          details: `Modified fields: ${changedFields.join(', ')}`,
+          type: 'USER'
+        });
+      }
+
       setCurrentUser({ ...currentUser, ...editForm });
       setIsEditing(false);
       alert('Profile Updated Successfully!');

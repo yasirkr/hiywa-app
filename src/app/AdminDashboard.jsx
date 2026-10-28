@@ -82,6 +82,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [selectedDonorMemberId, setSelectedDonorMemberId] = useState('');
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
+  const [donationSearchQuery, setDonationSearchQuery] = useState('');
 
   // Campaign & Mandatory Status Remarks Modal
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -98,7 +99,8 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
 
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
   const [promoteUserId, setPromoteUserId] = useState(null);
-  const [selectedPerms, setSelectedPerms] = useState({ MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
+  const [promoteSearchQuery, setPromoteSearchQuery] = useState('');
+  const [selectedPerms, setSelectedPerms] = useState({ ALL: false, MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
 
   // Reports Filters
   const [repType, setRepType] = useState('DIRECTORY');
@@ -533,10 +535,9 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
     }
   };
 
-  // Top Grid Menu Button (9 Tabs - Admin Actions Removed & Moved Inside Member Profile)
+  // Top Grid Menu Button
   const AdminTabBtn = ({ id, icon, label, perm }) => {
-    if (perm !== 'PUBLIC' && !hasPerm(perm) && !isCore) return null;
-    if ((id === 'SETTINGS' || id === 'EVENTS' || id === 'ROLES') && !isCore) return null;
+    if (perm !== 'PUBLIC' && !hasPerm(perm)) return null;
     const active = activeTab === id;
     return (
       <div onClick={() => onNavigate(`admin_${id.toLowerCase()}`)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', cursor: 'pointer' }}>
@@ -549,7 +550,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   };
 
   // Render Enhanced Campaign Card for Admin
-  const renderAdminCampaignCard = (c, isCompact = false) => {
+  const renderAdminCampaignCard = (c, isCompact = false, index = null) => {
     const raised = parseFloat(c.raised_amount) || 0;
     const target = parseFloat(c.target_amount) || 1;
     const remaining = Math.max(0, target - raised);
@@ -559,11 +560,16 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
     const isStopped = c.status === 'STOPPED' || goalAchieved;
     const donorCount = globalTxns.filter(t => t.campaign_id === c.campaign_id).length;
 
-    // COMPACT LIST VIEW (Only Title shown for Completed / Stopped Drives)
+    // COMPACT LIST VIEW (Title & Serial No. for Completed / Stopped Drives)
     if (isCompact) {
       return (
-        <div key={c.campaign_id} onClick={() => setViewClosedCamp(c)} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '12px 14px', border: '1px solid #cbd5e1', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-          <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{c.title}</h4>
+        <div key={c.campaign_id} onClick={() => setViewClosedCamp(c)} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '12px 14px', border: '1px solid #cbd5e1', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {index !== null && (
+              <div style={{ width: '26px', height: '26px', borderRadius: '8px', backgroundColor: '#f1f5f9', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '900' }}>#{index}</div>
+            )}
+            <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{c.title}</h4>
+          </div>
           <span style={{ backgroundColor: goalAchieved ? '#dcfce7' : '#fee2e2', color: goalAchieved ? '#16a34a' : '#dc2626', padding: '3px 8px', borderRadius: '6px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase' }}>
             {goalAchieved ? '🎉 Goal Met' : '⏹️ Stopped'} →
           </span>
@@ -998,18 +1004,21 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   <button onClick={() => onNavigate('adminRegister', activeTab === 'STUDENTS' ? 'STUDENT' : 'MEMBER')} style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '0 14px', borderRadius: '10px', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add</button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {filteredDirectory.map(m => {
+                  {filteredDirectory.map((m, idx) => {
                     const relPrefix = m.gender === 'FEMALE' ? 'D/O' : 'S/O';
                     return (
-                      <div key={m.official_id} onClick={() => { setSelectedDetailUser(m); setIsEditingUser(false); }} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '9px 12px', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                      <div key={m.official_id} onClick={() => { setSelectedDetailUser(m); setIsEditingUser(false); }} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '9px 12px', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                        <div style={{ width: '26px', height: '26px', borderRadius: '8px', backgroundColor: '#f1f5f9', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '900', flexShrink: 0 }}>
+                          #{idx + 1}
+                        </div>
                         {m.profile_photo ? (
-                          <img src={m.profile_photo} alt="" style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover' }} />
+                          <img src={m.profile_photo} alt="" style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
                         ) : (
-                          <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#0a192f', color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '13px' }}>{m.full_name?.charAt(0)}</div>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#0a192f', color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '13px', flexShrink: 0 }}>{m.full_name?.charAt(0)}</div>
                         )}
-                        <div style={{ flex: 1 }}>
-                          <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{m.full_name}</p>
-                          <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>{relPrefix} {m.father_name}</p>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name}</p>
+                          <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{relPrefix} {m.father_name}</p>
                         </div>
                       </div>
                     );
@@ -1110,7 +1119,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {pendingDuesList
                       .filter(u => !searchQuery || u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(u => {
+                      .map((u, idx) => {
                         const relPrefix = u.gender === 'FEMALE' ? 'D/O' : 'S/O';
                         return (
                           <div
@@ -1125,6 +1134,9 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                             style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '10px 12px', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                              <div style={{ width: '26px', height: '26px', borderRadius: '8px', backgroundColor: '#f1f5f9', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '900', flexShrink: 0 }}>
+                                #{idx + 1}
+                              </div>
                               {u.profile_photo ? (
                                 <img src={u.profile_photo} alt="" style={{ width: '36px', height: '36px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }} />
                               ) : (
@@ -1162,6 +1174,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               
               const expOffice = allExpenses.filter(t => t.expense_category === 'OFFICE USE').reduce((s, t) => s + Number(t.amount || 0), 0);
               const expCharity = allExpenses.filter(t => t.expense_category === 'CHARITY').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const expDrives = allExpenses.filter(t => t.expense_category === 'DRIVES').reduce((s, t) => s + Number(t.amount || 0), 0);
               const expOther = allExpenses.filter(t => !t.expense_category).reduce((s, t) => s + Number(t.amount || 0), 0); // Legacy backwards compatibility
 
               return (
@@ -1194,9 +1207,10 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                       <span style={{ display: 'block', fontSize: '9px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Expense</span>
                       <span style={{ fontSize: '16px', fontWeight: '900', color: '#ef4444' }}>₹{totalExpenseVal.toLocaleString()}</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '9px', fontWeight: '800', color: '#64748b' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '8.5px', fontWeight: '800', color: '#64748b' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>OFFICE:</span> <span style={{ color: '#0f172a' }}>₹{(expOffice + expOther).toLocaleString()}</span></div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CHARITY:</span> <span style={{ color: '#0f172a' }}>₹{expCharity.toLocaleString()}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>DRIVES:</span> <span style={{ color: '#0f172a' }}>₹{expDrives.toLocaleString()}</span></div>
                     </div>
                   </div>
 
@@ -1204,7 +1218,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
 
                 {/* 3. LOG BUTTONS (MOVED BELOW BALANCE/STATS) */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-                  <button onClick={() => { setIsGuestDonation(true); setCashAmount(''); setCashReason(''); setGuestName(''); setDonationMember(''); setShowLogDonationModal(true); }} style={{ flex: 1, padding: '11px', backgroundColor: '#1e3a8a', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(30,58,138,0.2)' }}>
+                  <button onClick={() => { setDonationDonorType('GUEST'); setDonationSearchQuery(''); setSelectedDonorMemberId(''); setGuestName(''); setGuestPhone(''); setCashAmount(''); setCashReason(''); setGuestModalVisible(true); }} style={{ flex: 1, padding: '11px', backgroundColor: '#1e3a8a', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(30,58,138,0.2)' }}>
                     + Log Donation
                   </button>
                   <button onClick={() => setExpenseModalVisible(true)} style={{ flex: 1, padding: '11px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(220,38,38,0.2)' }}>
@@ -1394,7 +1408,10 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                     {campaigns.filter(c => (c.status === 'ACTIVE' || c.status === 'PAUSED') && (parseFloat(c.raised_amount) || 0) < (parseFloat(c.target_amount) || 1)).map(c => renderAdminCampaignCard(c, false))}
 
                     <h3 style={{ margin: '16px 0 8px 0', fontSize: '11px', fontWeight: '900', textTransform: 'uppercase', color: '#475569' }}>Completed / Stopped Drives</h3>
-                    {campaigns.filter(c => c.status === 'STOPPED' || (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1)).map(c => renderAdminCampaignCard(c, true))}
+                    {campaigns
+                      .filter(c => c.status === 'STOPPED' || (parseFloat(c.raised_amount) || 0) >= (parseFloat(c.target_amount) || 1))
+                      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)) // Most recent at the top
+                      .map((c, idx) => renderAdminCampaignCard(c, true, idx + 1))}
                   </div>
                 )}
               </div>
@@ -1516,37 +1533,43 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
 
             {/* 6. ADMIN ROLES TAB (ADD ADMIN WITH PAGE SELECTION & DIRECT REVOKE) */}
             {activeTab === 'ROLES' && (
-              <div style={{ backgroundColor: '#fff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9' }}>
+              <div>
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>🛡️ Admin Rights & Roles</h4>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Assign Page Access or Revoke Sub-Admins</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Assign Access or Revoke Sub-Admins</p>
                   </div>
                   <button
                     onClick={() => {
                       setPromoteUserId('');
-                      setSelectedPerms({ MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
+                      setPromoteSearchQuery('');
+                      setSelectedPerms({ ALL: false, MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
                       setPromoteModalVisible(true);
                     }}
-                    style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '7px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+                    style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(10,25,47,0.2)' }}
                   >
                     + Add Admin
                   </button>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {directory.filter(u => u.role === 'ADMIN').map(a => {
+                  {directory.filter(u => u.role === 'ADMIN').map((a, idx) => {
                     let parsedPerms = [];
                     try { parsedPerms = JSON.parse(a.admin_permissions || '[]'); } catch (e) {}
                     return (
                       <div key={a.official_id} style={{ padding: '10px 12px', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: '0 0 3px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>
-                            {a.full_name} {a.is_core_admin ? '👑' : '⭐'}
-                          </p>
-                          <p style={{ margin: 0, fontSize: '9px', color: '#1e3a8a', fontWeight: '800', textTransform: 'uppercase' }}>
-                            {a.is_core_admin ? 'CORE ADMIN • FULL SYSTEM ACCESS' : (parsedPerms.length > 0 ? parsedPerms.join(' • ') : 'NO PAGES ASSIGNED')}
-                          </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                          <div style={{ width: '26px', height: '26px', borderRadius: '8px', backgroundColor: '#e2e8f0', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '900', flexShrink: 0 }}>
+                            #{idx + 1}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: '0 0 3px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>
+                              {a.full_name} {a.is_core_admin ? '👑' : '⭐'}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '9px', color: '#1e3a8a', fontWeight: '800', textTransform: 'uppercase' }}>
+                              {a.is_core_admin ? 'CORE ADMIN • FULL SYSTEM ACCESS' : (parsedPerms.length > 0 ? parsedPerms.join(' • ') : 'NO PAGES ASSIGNED')}
+                            </p>
+                          </div>
                         </div>
 
                         {a.is_core_admin ? (
@@ -1594,30 +1617,46 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
             {activeTab === 'EVENTS' && (
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '12px', border: '1px solid #cbd5e1' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}>System Event Logs</h4>
+                  <h4 style={{ margin: 0, fontSize: '11px', fontWeight: '800', textTransform: 'uppercase' }}>System Event Logs</h4>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     {[['', 'All'], ['ADMIN', 'Admin'], ['USER', 'Members']].map(([k, lbl]) => (
-                      <button key={lbl} onClick={() => setEventFilter(k)} style={{ padding: '4px 8px', borderRadius: '6px', border: 'none', fontSize: '8.5px', fontWeight: '900', backgroundColor: eventFilter === k ? '#1e3a8a' : '#f1f5f9', color: eventFilter === k ? '#fff' : '#475569', cursor: 'pointer' }}>{lbl}</button>
+                      <button key={lbl} onClick={() => setEventFilter(k)} style={{ padding: '4px 8px', borderRadius: '6px', border: 'none', fontSize: '8.5px', fontWeight: '800', backgroundColor: eventFilter === k ? '#1e3a8a' : '#f1f5f9', color: eventFilter === k ? '#fff' : '#475569', cursor: 'pointer' }}>{lbl}</button>
                     ))}
                   </div>
                 </div>
-                {[
-                  ...globalTxns.map(t => ({ date: t.transaction_date, name: t.full_name || 'Member', action: `Logged ${t.donation_type}`, target: `₹${t.amount}`, type: (t.payment_method && t.payment_method.includes('OFFLINE')) ? 'ADMIN' : 'USER' })),
-                  ...systemLogs.map(s => ({ date: s.timestamp, name: s.admin_name, action: s.action, target: s.details, type: 'ADMIN' }))
-                ]
+                {systemLogs
+                  .map(s => {
+                    // Automatically swap Official IDs for Full Names in the description
+                    let desc = s.details || '';
+                    directory.forEach(m => {
+                      if (desc.includes(m.official_id)) desc = desc.replace(m.official_id, m.full_name);
+                    });
+                    
+                    const d = new Date(s.timestamp);
+                    const timeString = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    const dateString = d.toLocaleDateString('en-GB');
+
+                    return { 
+                      dateObj: d,
+                      dateTime: `${dateString} ${timeString}`, 
+                      name: s.admin_name || s.user_name || 'System', 
+                      action: s.action, 
+                      target: desc, 
+                      type: s.type || 'ADMIN'
+                    };
+                  })
                   .filter(l => !eventFilter || l.type === eventFilter)
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .sort((a, b) => b.dateObj - a.dateObj)
                   .slice(0, 40)
                   .map((log, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f1f5f9', fontSize: '9.5px' }}>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: '900', color: '#0f172a' }}>{log.action}</p>
-                        <p style={{ margin: 0, color: '#64748b', fontWeight: '700' }}>{log.target}</p>
+                    <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', fontSize: '9px' }}>
+                        <span style={{ fontWeight: '700', color: '#475569' }}>{log.dateTime}</span>
+                        <span style={{ fontWeight: '700', color: log.type === 'ADMIN' ? '#dc2626' : '#10b981' }}>Event by: {log.name}</span>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ margin: 0, fontWeight: '900', color: log.type === 'ADMIN' ? '#dc2626' : '#1e3a8a' }}>{log.name}</p>
-                        <p style={{ margin: 0, fontSize: '8px', color: '#94a3b8' }}>{new Date(log.date).toLocaleDateString('en-GB')}</p>
-                      </div>
+                      <p style={{ margin: 0, fontSize: '10.5px', fontWeight: '600', color: '#0f172a' }}>
+                        {log.action} <span style={{ fontWeight: '400', color: '#64748b' }}>• {log.target}</span>
+                      </p>
                     </div>
                   ))}
               </div>
@@ -1657,16 +1696,18 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   </div>
                 </div>
 
-                {/* Compact Danger Zone */}
-                <div style={{ backgroundColor: '#fef2f2', borderRadius: '16px', padding: '12px', border: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '10px', fontWeight: '900', color: '#991b1b', textTransform: 'uppercase' }}>Danger Zone</h4>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '8.5px', color: '#b91c1c', fontWeight: '600' }}>Reset non-core members, txns & drives</p>
+                {/* Compact Danger Zone (CORE ADMIN ONLY) */}
+                {isCore && (
+                  <div style={{ backgroundColor: '#fef2f2', borderRadius: '16px', padding: '12px', border: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '10px', fontWeight: '900', color: '#991b1b', textTransform: 'uppercase' }}>Danger Zone</h4>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '8.5px', color: '#b91c1c', fontWeight: '600' }}>Reset non-core members, txns & drives</p>
+                    </div>
+                    <button onClick={() => setMasterResetModal(true)} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>
+                      ⚠️ Wipe Data
+                    </button>
                   </div>
-                  <button onClick={() => setMasterResetModal(true)} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>
-                    ⚠️ Wipe Data
-                  </button>
-                </div>
+                )}
               </div>
             )}
           </>
@@ -1899,23 +1940,30 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
       {/* EXPENSE, GUEST CASH, MEMBER CASH, CAMPAIGN & PROMOTE MODALS */}
       {expenseModalVisible && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ width: '100%', maxWidth: '300px', backgroundColor: '#fff', borderRadius: '20px', padding: '18px' }}>
+          <div style={{ width: '100%', maxWidth: '310px', backgroundColor: '#fff', borderRadius: '20px', padding: '18px' }}>
             <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: '900', color: '#ef4444', textTransform: 'uppercase' }}>Log Trust Expense</h4>
             
             <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px', marginBottom: '12px', gap: '4px' }}>
               <button
                 type="button"
                 onClick={() => setExpenseCategory('OFFICE USE')}
-                style={{ flex: 1, padding: '8px 4px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'OFFICE USE' ? '#0a192f' : 'transparent', color: expenseCategory === 'OFFICE USE' ? '#ffffff' : '#475569', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '8px 2px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'OFFICE USE' ? '#0a192f' : 'transparent', color: expenseCategory === 'OFFICE USE' ? '#ffffff' : '#475569', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
               >
                 🏢 Office
               </button>
               <button
                 type="button"
                 onClick={() => setExpenseCategory('CHARITY')}
-                style={{ flex: 1, padding: '8px 4px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'CHARITY' ? '#0a192f' : 'transparent', color: expenseCategory === 'CHARITY' ? '#ffffff' : '#475569', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '8px 2px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'CHARITY' ? '#0a192f' : 'transparent', color: expenseCategory === 'CHARITY' ? '#ffffff' : '#475569', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
               >
                 🤝 Charity
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpenseCategory('DRIVES')}
+                style={{ flex: 1, padding: '8px 2px', borderRadius: '8px', border: 'none', backgroundColor: expenseCategory === 'DRIVES' ? '#0a192f' : 'transparent', color: expenseCategory === 'DRIVES' ? '#ffffff' : '#475569', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
+              >
+                📢 Drives
               </button>
             </div>
 
@@ -1970,21 +2018,43 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                 />
               </>
             ) : (
-              <select
-                value={selectedDonorMemberId}
-                onChange={e => setSelectedDonorMemberId(e.target.value)}
-                style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', marginBottom: '8px', fontSize: '11px', fontWeight: '800', color: '#0f172a', boxSizing: 'border-box' }}
-              >
-                <option value="">-- Select Member --</option>
-                {directory
-                  .filter(m => m.membership_status === 'ACTIVE')
-                  .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-                  .map(m => (
-                    <option key={m.official_id} value={m.official_id}>
-                      {m.full_name} ({m.official_id})
-                    </option>
-                  ))}
-              </select>
+              <div style={{ marginBottom: '8px' }}>
+                {!selectedDonorMemberId ? (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Search Member Name..."
+                      value={donationSearchQuery}
+                      onChange={e => setDonationSearchQuery(e.target.value)}
+                      style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '6px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                      {directory
+                        .filter(m => m.membership_status === 'ACTIVE' && (!donationSearchQuery || m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase())))
+                        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                        .map(m => (
+                          <div
+                            key={m.official_id}
+                            onClick={() => setSelectedDonorMemberId(m.official_id)}
+                            style={{ padding: '8px 10px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '800', cursor: 'pointer', color: '#0f172a' }}
+                          >
+                            {m.full_name} ({m.official_id})
+                          </div>
+                        ))}
+                      {directory.filter(m => m.membership_status === 'ACTIVE' && (!donationSearchQuery || m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase()))).length === 0 && (
+                        <div style={{ padding: '10px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>No members found.</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '9px' }}>
+                    <span style={{ fontSize: '10.5px', fontWeight: '900', color: '#1e3a8a' }}>
+                      {directory.find(m => m.official_id === selectedDonorMemberId)?.full_name}
+                    </span>
+                    <button onClick={() => setSelectedDonorMemberId('')} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '9px', fontWeight: '900', cursor: 'pointer' }}>✕ Change</button>
+                  </div>
+                )}
+              </div>
             )}
 
             <input
@@ -2116,69 +2186,105 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
       )}
 
       {promoteModalVisible && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ width: '100%', maxWidth: '320px', backgroundColor: '#fff', borderRadius: '20px', padding: '18px' }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>
-              🛡️ Assign Sub-Admin & Pages
-            </h4>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', overflowY: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: '340px', backgroundColor: '#fff', borderRadius: '24px', padding: '18px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', marginTop: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>🛡️ Assign Admin Roles</h4>
+              <button onClick={() => setPromoteModalVisible(false)} style={{ background: '#f1f5f9', border: 'none', width: '28px', height: '28px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer', color: '#475569' }}>✕</button>
+            </div>
 
-            <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
-              Select Member *
-            </label>
-            <select
-              value={promoteUserId || ''}
-              onChange={e => setPromoteUserId(e.target.value)}
-              style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', marginBottom: '12px', fontSize: '11px', fontWeight: '800', color: '#0f172a', boxSizing: 'border-box' }}
-            >
-              <option value="">-- Choose Member --</option>
-              {directory
-                .filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE')
-                .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-                .map(m => (
-                  <option key={m.official_id} value={m.official_id}>
-                    {m.full_name} ({m.official_id})
-                  </option>
-                ))}
-            </select>
+            <div style={{ marginBottom: '12px' }}>
+              {!promoteUserId ? (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Search Member Name..."
+                    value={promoteSearchQuery}
+                    onChange={e => setPromoteSearchQuery(e.target.value)}
+                    style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '6px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }}
+                  />
+                  <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px' }}>
+                    {directory
+                      .filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE' && (!promoteSearchQuery || m.full_name?.toLowerCase().includes(promoteSearchQuery.toLowerCase())))
+                      .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                      .map(m => (
+                        <div key={m.official_id} onClick={() => setPromoteUserId(m.official_id)} style={{ padding: '10px', borderRadius: '8px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '900', cursor: 'pointer', color: '#0f172a', backgroundColor: '#fff' }}>
+                          {m.full_name} <span style={{ color: '#64748b', fontWeight: '800' }}>({m.official_id})</span>
+                        </div>
+                      ))}
+                    {directory.filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE' && (!promoteSearchQuery || m.full_name?.toLowerCase().includes(promoteSearchQuery.toLowerCase()))).length === 0 && (
+                      <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>No members found.</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '900', color: '#1e3a8a' }}>
+                    {directory.find(m => m.official_id === promoteUserId)?.full_name}
+                  </span>
+                  <button onClick={() => setPromoteUserId(null)} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#ef4444', fontSize: '9px', fontWeight: '900', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px' }}>✕ Change</button>
+                </div>
+              )}
+            </div>
 
-            <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
-              Select Allowed Admin Pages *
+            <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '6px' }}>
+              Select Admin Permissions *
             </label>
             {[
+              ['ALL', '🌟 SUPER ADMIN (All Pages)'],
               ['MANAGE_USERS', '👥 Members & Students Directory'],
               ['MANAGE_FINANCE', '💵 Finance & Subscription Dues'],
               ['MANAGE_CAMPAIGNS', '📢 Cause Drives / Campaigns'],
               ['REPORTS_CENTRAL', '📑 Reports Central']
-            ].map(([key, label]) => (
-              <div
-                key={key}
-                onClick={() => setSelectedPerms({ ...selectedPerms, [key]: !selectedPerms[key] })}
-                style={{ padding: '9px 10px', borderRadius: '9px', border: selectedPerms[key] ? '1px solid #93c5fd' : '1px solid #e2e8f0', backgroundColor: selectedPerms[key] ? '#eff6ff' : '#f8fafc', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontSize: '10.5px', fontWeight: '800', color: '#0f172a' }}
-              >
-                <span>{label}</span>
-                <span>{selectedPerms[key] ? '✅' : '⬜'}</span>
-              </div>
-            ))}
+            ].map(([key, label]) => {
+              // If ALL is selected, visually disable the others to show they are included
+              const isIncluded = selectedPerms.ALL && key !== 'ALL';
+              return (
+                <div
+                  key={key}
+                  onClick={() => {
+                    if (isIncluded) return;
+                    setSelectedPerms({ ...selectedPerms, [key]: !selectedPerms[key] });
+                  }}
+                  style={{ 
+                    padding: '10px 12px', 
+                    borderRadius: '10px', 
+                    border: selectedPerms[key] || isIncluded ? '1.5px solid #93c5fd' : '1px solid #cbd5e1', 
+                    backgroundColor: selectedPerms[key] ? '#eff6ff' : isIncluded ? '#f8fafc' : '#ffffff', 
+                    marginBottom: '6px', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    cursor: isIncluded ? 'not-allowed' : 'pointer', 
+                    fontSize: '10.5px', 
+                    fontWeight: key === 'ALL' ? '900' : '800', 
+                    color: isIncluded ? '#94a3b8' : '#0f172a',
+                    opacity: isIncluded ? 0.6 : 1
+                  }}
+                >
+                  <span>{label}</span>
+                  <span>{selectedPerms[key] || isIncluded ? '✅' : '⬜'}</span>
+                </div>
+              );
+            })}
 
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-              <button onClick={() => setPromoteModalVisible(false)} style={{ flex: 1, padding: '10px', backgroundColor: '#f1f5f9', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px', cursor: 'pointer' }}>Cancel</button>
-              <button
-                onClick={async () => {
-                  if (!promoteUserId) return alert('Please select a member first.');
-                  const arr = Object.keys(selectedPerms).filter(k => selectedPerms[k]);
-                  if (arr.length === 0) return alert('Please select at least one page permission.');
-                  await updateDoc(doc(db, 'members', promoteUserId), { role: 'ADMIN', admin_permissions: JSON.stringify(arr) });
-                  logAdminEvent('Assigned Sub-Admin', `${promoteUserId} (${arr.join(', ')})`);
-                  alert('Sub-Admin rights saved successfully!');
-                  setPromoteModalVisible(false);
-                  setSelectedDetailUser(null);
-                  fetchData();
-                }}
-                style={{ flex: 1, padding: '10px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '9px', fontWeight: '900', fontSize: '10.5px', textTransform: 'uppercase', cursor: 'pointer' }}
-              >
-                Save Rights
-              </button>
-            </div>
+            <button
+              onClick={async () => {
+                if (!promoteUserId) return alert('Please select a member first.');
+                const arr = Object.keys(selectedPerms).filter(k => selectedPerms[k]);
+                if (arr.length === 0) return alert('Please select at least one permission.');
+                
+                await updateDoc(doc(db, 'members', promoteUserId), { role: 'ADMIN', admin_permissions: JSON.stringify(arr) });
+                logAdminEvent('Assigned Sub-Admin', `${promoteUserId} (${arr.join(', ')})`);
+                alert('Admin permissions saved successfully!');
+                setPromoteModalVisible(false);
+                setSelectedDetailUser(null);
+                fetchData();
+              }}
+              style={{ width: '100%', marginTop: '8px', padding: '12px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 12px rgba(30,58,138,0.2)' }}
+            >
+              Save Admin Rights
+            </button>
           </div>
         </div>
       )}
