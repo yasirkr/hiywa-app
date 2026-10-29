@@ -196,13 +196,16 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const isSubsDisabled = !subStartMonth || isFutureStart;
 
   const pendingDuesList = isSubsDisabled ? [] : directory
-    .filter(u => !u.is_core_admin && (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE')
+    // Ensure we ONLY include members whose subscription_started flag is explicitly true
+    .filter(u => !u.is_core_admin && (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE' && u.subscription_started)
     .map(u => {
-      const joinDate = u.join_date ? new Date(u.join_date) : new Date();
-      let startDate = joinDate;
+      // Prioritize their specific individual start date, fallback to join date
+      const individualStart = u.subscription_start_date ? new Date(u.subscription_start_date) : (u.join_date ? new Date(u.join_date) : new Date());
+      let startDate = individualStart;
+      
       if (subStartMonth) {
         const systemStart = new Date(`${subStartMonth}-01`);
-        if (systemStart > joinDate) startDate = systemStart;
+        if (systemStart > individualStart) startDate = systemStart;
       }
       const rawMonths = ((new Date().getFullYear() - startDate.getFullYear()) * 12) + (new Date().getMonth() - startDate.getMonth()) + 1;
       const dues = Math.max(0, Math.max(0, rawMonths) - (parseInt(u.total_months_paid) || 0));
@@ -626,6 +629,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                 setCashCampId(c.campaign_id);
                 setSelectedDonorMemberId('');
                 setCashAmount('');
+                setDonationSearchQuery(''); // Clears the search on open
                 setCampCashModalVisible(true);
               }}
               style={{ padding: '7px 12px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }}
@@ -997,6 +1001,17 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                       </p>
                     </div>
                   </div>
+                  
+                  <button 
+                    onClick={() => {
+                      const headers = ["Official ID", "Full Name", "Father Name", "Mother Name", "Parents Status", "Role", "Membership Status", "Gender", "DOB", "Blood Group", "Marital Status", "Aadhaar Number", "Country Code", "Primary Mobile", "WhatsApp Number", "Student Mobile", "Email", "Native Place", "Current City", "Permanent Address", "Education Category", "Course / Specialization", "Occupation", "Class / Grade", "Institution Name", "Institution Type", "Institution Location", "Medium", "Islamic Studies", "Islamic Qualification", "Madrasa Name", "Madrasa Location", "Total Months Paid", "Join Date"].join(",") + "\n";
+                      const rows = filteredDirectory.map(u => [u.official_id, u.full_name, u.father_name, u.mother_name, u.parents_status, u.role, u.membership_status, u.gender, u.dob, u.blood_group, u.marital_status, u.aadhaar_number, u.country_code || '+91', u.phone_number, u.whatsapp_number, u.student_mobile, u.email, u.native_place, u.current_location, u.address, u.educational_qualification, u.course_details, u.occupation, u.class_grade, u.school_name, u.school_type, u.school_location, u.medium_of_instruction, u.islamic_studies, u.islamic_qualification, u.madrasa_name, u.madrasa_location, u.total_months_paid || 0, u.join_date ? new Date(u.join_date).toLocaleDateString('en-GB') : ''].map(cleanCSV).join(",")).join("\n");
+                      downloadCSV(headers + rows, `HIYWA_${activeTab}_Directory.csv`);
+                    }}
+                    style={{ backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', padding: '9px 12px', borderRadius: '10px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <span style={{ fontSize: '14px' }}>📥</span> CSV
+                  </button>
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
@@ -1209,8 +1224,8 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '8.5px', fontWeight: '800', color: '#64748b' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>OFFICE:</span> <span style={{ color: '#0f172a' }}>₹{(expOffice + expOther).toLocaleString()}</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CHARITY:</span> <span style={{ color: '#0f172a' }}>₹{expCharity.toLocaleString()}</span></div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>DRIVES:</span> <span style={{ color: '#0f172a' }}>₹{expDrives.toLocaleString()}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CHARITY:</span> <span style={{ color: '#0f172a' }}>₹{expCharity.toLocaleString()}</span></div>
                     </div>
                   </div>
 
@@ -1807,20 +1822,26 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               <input type="text" placeholder="Search Member / Student..." value={actionSearchQuery} onChange={e => setActionSearchQuery(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '14px', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }} />
               
               <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {filteredList.length === 0 ? <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', fontWeight: '800', padding: '20px 0' }}>No eligible members found.</p> : filteredList.map(u => (
-                  <div key={u.official_id} onClick={() => {
-                    executeAdminAction(u, actionModal);
-                    setActionModal(null);
-                    setActionSearchQuery('');
-                  }} style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-                    <div>
-                      <p style={{ margin: '0 0 2px 0', fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{u.full_name}</p>
-                      <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '800' }}>{u.official_id} • {u.role}</p>
-                    </div>
-                    <span style={{ backgroundColor: '#1e3a8a', color: '#fff', padding: '5px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase' }}>Select</span>
-                  </div>
-                ))}
-              </div>
+                  {!actionSearchQuery || actionSearchQuery.trim() === '' ? (
+                    <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', fontWeight: '800', padding: '20px 0' }}>Type a name or ID to search...</p>
+                  ) : filteredList.length === 0 ? (
+                    <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', fontWeight: '800', padding: '20px 0' }}>No eligible members found.</p>
+                  ) : (
+                    filteredList.map(u => (
+                      <div key={u.official_id} onClick={() => {
+                        executeAdminAction(u, actionModal);
+                        setActionModal(null);
+                        setActionSearchQuery('');
+                      }} style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                        <div>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '11px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{u.full_name}</p>
+                          <p style={{ margin: 0, fontSize: '8.5px', color: '#64748b', fontWeight: '800' }}>{u.official_id} • {u.role}</p>
+                        </div>
+                        <span style={{ backgroundColor: '#1e3a8a', color: '#fff', padding: '5px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase' }}>Select</span>
+                      </div>
+                    ))
+                  )}
+                </div>
             </div>
           </div>
         );
@@ -2028,21 +2049,24 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                       onChange={e => setDonationSearchQuery(e.target.value)}
                       style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '6px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }}
                     />
-                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
-                      {directory
-                        .filter(m => m.membership_status === 'ACTIVE' && (!donationSearchQuery || m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase())))
-                        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-                        .map(m => (
-                          <div
-                            key={m.official_id}
-                            onClick={() => setSelectedDonorMemberId(m.official_id)}
-                            style={{ padding: '8px 10px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '800', cursor: 'pointer', color: '#0f172a' }}
-                          >
-                            {m.full_name} ({m.official_id})
-                          </div>
-                        ))}
-                      {directory.filter(m => m.membership_status === 'ACTIVE' && (!donationSearchQuery || m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase()))).length === 0 && (
-                        <div style={{ padding: '10px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>No members found.</div>
+                    <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                      {donationSearchQuery.trim() === '' ? (
+                        <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>Type a name to search members...</div>
+                      ) : directory.filter(m => m.membership_status === 'ACTIVE' && m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase())).length === 0 ? (
+                        <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>No members found.</div>
+                      ) : (
+                        directory
+                          .filter(m => m.membership_status === 'ACTIVE' && m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase()))
+                          .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                          .map(m => (
+                            <div
+                              key={m.official_id}
+                              onClick={() => setSelectedDonorMemberId(m.official_id)}
+                              style={{ padding: '10px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '900', cursor: 'pointer', color: '#0f172a', backgroundColor: '#fff' }}
+                            >
+                              {m.full_name} <span style={{ color: '#64748b', fontWeight: '800' }}>({m.official_id})</span>
+                            </div>
+                          ))
                       )}
                     </div>
                   </>
@@ -2051,7 +2075,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                     <span style={{ fontSize: '10.5px', fontWeight: '900', color: '#1e3a8a' }}>
                       {directory.find(m => m.official_id === selectedDonorMemberId)?.full_name}
                     </span>
-                    <button onClick={() => setSelectedDonorMemberId('')} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '9px', fontWeight: '900', cursor: 'pointer' }}>✕ Change</button>
+                    <button onClick={() => { setSelectedDonorMemberId(''); setDonationSearchQuery(''); }} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#ef4444', fontSize: '9px', fontWeight: '900', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px' }}>✕ Change</button>
                   </div>
                 )}
               </div>
@@ -2110,21 +2134,46 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               </p>
 
               <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '3px' }}>Select Member *</label>
-              <select
-                value={selectedDonorMemberId}
-                onChange={e => setSelectedDonorMemberId(e.target.value)}
-                style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', marginBottom: '10px', fontSize: '11px', fontWeight: '800', color: '#0f172a', boxSizing: 'border-box' }}
-              >
-                <option value="">-- Choose Member --</option>
-                {directory
-                  .filter(m => m.membership_status === 'ACTIVE')
-                  .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-                  .map(m => (
-                    <option key={m.official_id} value={m.official_id}>
-                      {m.full_name} ({m.official_id})
-                    </option>
-                  ))}
-              </select>
+              <div style={{ marginBottom: '10px' }}>
+                {!selectedDonorMemberId ? (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Search Member Name..."
+                      value={donationSearchQuery}
+                      onChange={e => setDonationSearchQuery(e.target.value)}
+                      style={{ width: '100%', padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', marginBottom: '6px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                      {donationSearchQuery.trim() === '' ? (
+                        <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>Type a name to search members...</div>
+                      ) : directory.filter(m => m.membership_status === 'ACTIVE' && m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase())).length === 0 ? (
+                        <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>No members found.</div>
+                      ) : (
+                        directory
+                          .filter(m => m.membership_status === 'ACTIVE' && m.full_name?.toLowerCase().includes(donationSearchQuery.toLowerCase()))
+                          .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                          .map(m => (
+                            <div
+                              key={m.official_id}
+                              onClick={() => setSelectedDonorMemberId(m.official_id)}
+                              style={{ padding: '10px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '900', cursor: 'pointer', color: '#0f172a', backgroundColor: '#fff' }}
+                            >
+                              {m.full_name} <span style={{ color: '#64748b', fontWeight: '800' }}>({m.official_id})</span>
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '9px' }}>
+                    <span style={{ fontSize: '10.5px', fontWeight: '900', color: '#1e3a8a' }}>
+                      {directory.find(m => m.official_id === selectedDonorMemberId)?.full_name}
+                    </span>
+                    <button onClick={() => setSelectedDonorMemberId('')} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#ef4444', fontSize: '9px', fontWeight: '900', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px' }}>✕ Change</button>
+                  </div>
+                )}
+              </div>
 
               <label style={{ display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '3px' }}>Amount Collected (₹) *</label>
               <input
@@ -2204,16 +2253,19 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                     style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '6px', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box' }}
                   />
                   <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px' }}>
-                    {directory
-                      .filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE' && (!promoteSearchQuery || m.full_name?.toLowerCase().includes(promoteSearchQuery.toLowerCase())))
-                      .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-                      .map(m => (
-                        <div key={m.official_id} onClick={() => setPromoteUserId(m.official_id)} style={{ padding: '10px', borderRadius: '8px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '900', cursor: 'pointer', color: '#0f172a', backgroundColor: '#fff' }}>
-                          {m.full_name} <span style={{ color: '#64748b', fontWeight: '800' }}>({m.official_id})</span>
-                        </div>
-                      ))}
-                    {directory.filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE' && (!promoteSearchQuery || m.full_name?.toLowerCase().includes(promoteSearchQuery.toLowerCase()))).length === 0 && (
+                    {!promoteSearchQuery || promoteSearchQuery.trim() === '' ? (
+                      <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>Type a name to search members...</div>
+                    ) : directory.filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE' && m.full_name?.toLowerCase().includes(promoteSearchQuery.toLowerCase())).length === 0 ? (
                       <div style={{ padding: '12px', fontSize: '9.5px', color: '#64748b', textAlign: 'center', fontWeight: '700' }}>No members found.</div>
+                    ) : (
+                      directory
+                        .filter(m => !m.is_core_admin && m.role !== 'STUDENT' && m.membership_status === 'ACTIVE' && m.full_name?.toLowerCase().includes(promoteSearchQuery.toLowerCase()))
+                        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                        .map(m => (
+                          <div key={m.official_id} onClick={() => setPromoteUserId(m.official_id)} style={{ padding: '10px', borderRadius: '8px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: '900', cursor: 'pointer', color: '#0f172a', backgroundColor: '#fff' }}>
+                            {m.full_name} <span style={{ color: '#64748b', fontWeight: '800' }}>({m.official_id})</span>
+                          </div>
+                        ))
                     )}
                   </div>
                 </>

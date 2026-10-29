@@ -738,8 +738,7 @@ export function BloodBankScreen({ onBack }) {
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name}</p>
-                      <p style={{ margin: '0 0 2px 0', fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>{relPrefix} {m.father_name} • {m.native_place || 'MTK PURAM'}</p>
-                      <p style={{ margin: 0, fontSize: '9.5px', color: '#1e3a8a', fontWeight: '900' }}>📞 {m.country_code || '+91'} {m.phone_number}</p>
+                      <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>{relPrefix} {m.father_name}</p>
                     </div>
                   </div>
                   <button
@@ -885,6 +884,8 @@ export const DonationPortal = SubscriptionScreen;
 // ==========================================
 export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewReceipt, onBack }) {
   const [campaigns, setCampaigns] = useState([]);
+  const [showManualPayModal, setShowManualPayModal] = useState(false);
+  const [selectedPayCamp, setSelectedPayCamp] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -908,7 +909,7 @@ export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewRec
     const isPaused = camp.status === 'PAUSED';
 
     return (
-      <div key={camp.campaign_id} onClick={() => onSelectCampaign(camp)} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '10px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+      <div key={camp.campaign_id} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
           <h4 style={{ margin: 0, fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{camp.title}</h4>
           <span style={{ backgroundColor: goalMet ? '#dcfce7' : isPaused ? '#fef3c7' : camp.status === 'STOPPED' ? '#fee2e2' : '#dbeafe', color: goalMet ? '#16a34a' : isPaused ? '#d97706' : camp.status === 'STOPPED' ? '#dc2626' : '#1e3a8a', padding: '2px 7px', borderRadius: '6px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase' }}>
@@ -917,14 +918,31 @@ export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewRec
         </div>
         <p style={{ margin: '0 0 10px 0', fontSize: '10.5px', color: '#64748b', fontWeight: '600' }}>{camp.description}</p>
         {camp.remarks && <p style={{ margin: '0 0 8px 0', fontSize: '9.5px', fontWeight: '800', color: '#b45309', backgroundColor: '#fffbeb', padding: '5px 8px', borderRadius: '6px' }}>Note: {camp.remarks}</p>}
+        
         <div style={{ height: '7px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden', marginBottom: '6px' }}>
           <div style={{ width: `${progress}%`, height: '100%', backgroundColor: goalMet ? '#10b981' : isPaused ? '#f59e0b' : '#1e3a8a' }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', fontWeight: '800', color: '#0f172a' }}>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', fontWeight: '800', color: '#0f172a', marginBottom: '12px' }}>
           <span>Collected: ₹{raised.toLocaleString()} ({progress}%)</span>
           <span style={{ color: '#d97706' }}>Rem: ₹{remaining.toLocaleString()}</span>
           <span style={{ color: '#1e3a8a' }}>Goal: ₹{target.toLocaleString()}</span>
         </div>
+
+        {/* DIRECT ACTION BUTTON (NO NAVIGATION REQUIRED) */}
+        {isPaused ? (
+          <div style={{ padding: '10px', backgroundColor: '#fef3c7', borderRadius: '10px', textAlign: 'center', fontWeight: '900', fontSize: '10.5px', color: '#d97706', textTransform: 'uppercase' }}>⏸️ PAUSED BY ADMIN</div>
+        ) : camp.status === 'STOPPED' || goalMet ? (
+          <div style={{ padding: '10px', backgroundColor: '#dcfce7', borderRadius: '10px', textAlign: 'center', fontWeight: '900', fontSize: '10.5px', color: '#16a34a', textTransform: 'uppercase' }}>🎉 GOAL ACHIEVED</div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { setSelectedPayCamp(camp); setShowManualPayModal(true); }}
+            style={{ width: '100%', padding: '10px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}
+          >
+            💖 Support This Drive
+          </button>
+        )}
       </div>
     );
   };
@@ -955,6 +973,13 @@ export function FundraisingListScreen({ currentUser, onSelectCampaign, onViewRec
           </>
         )}
       </div>
+
+      <ManualPayModal
+        visible={showManualPayModal}
+        onClose={() => { setShowManualPayModal(false); setSelectedPayCamp(null); }}
+        title="Support Fund Drive"
+        subtitle={selectedPayCamp ? `${selectedPayCamp.title} (Max Rem: ₹${Math.max(0, (parseFloat(selectedPayCamp.target_amount) || 1) - (parseFloat(selectedPayCamp.raised_amount) || 0)).toLocaleString()})` : ''}
+      />
     </div>
   );
 }
