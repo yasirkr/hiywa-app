@@ -38,6 +38,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
   const [primaryUpi, setPrimaryUpi] = useState('');
   const [secondaryUpi, setSecondaryUpi] = useState('');
   const [gpayNumber, setGpayNumber] = useState('');
+  const [adminMobile, setAdminMobile] = useState('');
   const [initialAmount, setInitialAmount] = useState('0');
   const [allowPublicReg, setAllowPublicReg] = useState(false);
   const [subStartMonth, setSubStartMonth] = useState('');
@@ -132,6 +133,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
         setPrimaryUpi(d.primary_upi || '');
         setSecondaryUpi(d.secondary_upi || '');
         setGpayNumber(d.gpay_phonepe_number || '');
+        setAdminMobile(d.admin_mobile || '');
         setInitialAmount(d.initial_amount || '0');
         setAllowPublicReg(d.allow_public_registration || false);
         setSubStartMonth(d.subscription_start_month || '');
@@ -536,6 +538,45 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
     } catch (err) {
       alert('Failed to update status.');
     }
+  };
+
+  const sendPushNotification = async (expoPushToken, title, body) => {
+    const message = {
+      to: expoPushToken,
+      sound: 'default',
+      title: title,
+      body: body,
+      data: { route: 'subscription' },
+    };
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Accept-encoding': 'gzip, deflate', 'Content-Type': 'application/json' },
+      body: JSON.stringify(message),
+    });
+  };
+
+  const handleSendReminders = async () => {
+    if (pendingDuesList.length === 0) return alert('No pending dues to remind!');
+    const usersWithTokens = pendingDuesList.filter(u => u.expo_push_token);
+    if (usersWithTokens.length === 0) return alert('No due members have push notifications enabled yet. They need to log into the new app update first!');
+    
+    if (!window.confirm(`Ready to send push notifications to ${usersWithTokens.length} member(s)?`)) return;
+
+    setIsSubmitting(true);
+    let successCount = 0;
+    for (const u of usersWithTokens) {
+      try {
+        await sendPushNotification(
+          u.expo_push_token,
+          "Pending Subscription Dues",
+          `Assalamu Alaikum ${u.full_name}, you have pending dues of ₹${u.duesAmount} (${u.duesMonths} Mo). Please check the HIYWA app.`
+        );
+        successCount++;
+      } catch (error) { console.error(error); }
+    }
+    setIsSubmitting(false);
+    alert(`Successfully sent ${successCount} reminders!`);
+    logAdminEvent('Sent Push Reminders', `Reminded ${successCount} members about pending dues.`);
   };
 
   // Top Grid Menu Button
@@ -1107,16 +1148,25 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   </div>
                 </div>
 
-                {/* Search Bar for Due Members */}
+                {/* Search Bar & Remind Button for Due Members */}
                 <div style={{ marginBottom: '10px' }}>
-                  <input
-                    type="text"
-                    placeholder="Search Due Member Name..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                  <p style={{ margin: '6px 0 0 2px', fontSize: '9px', fontWeight: '800', color: '#1e3a8a', textTransform: 'uppercase' }}>Tap on a member below to log their payment</p>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <input
+                      type="text"
+                      placeholder="Search Due Member Name..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    <button 
+                      onClick={handleSendReminders}
+                      disabled={isSubsDisabled || pendingDuesList.length === 0 || isSubmitting}
+                      style={{ backgroundColor: '#d97706', color: '#fff', border: 'none', padding: '0 14px', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 2px 8px rgba(217,119,6,0.2)' }}
+                    >
+                      {isSubmitting ? 'Sending...' : '🔔 Remind All'}
+                    </button>
+                  </div>
+                  <p style={{ margin: '0 0 0 2px', fontSize: '9px', fontWeight: '800', color: '#1e3a8a', textTransform: 'uppercase' }}>Tap on a member below to log their payment</p>
                 </div>
 
                 {/* Due Members List */}
@@ -1688,6 +1738,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                       ['PRI_UPI', '⚡ Primary UPI', primaryUpi || 'Not Set'],
                       ['SEC_UPI', '🏦 Secondary UPI', secondaryUpi || 'Not Set'],
                       ['GPAY_NUM', '📱 GPay / PhonePe', gpayNumber || 'Not Set'],
+                      ['ADMIN_MOB', '💬 Admin WhatsApp', adminMobile || 'Not Set'],
                       ['SUB_START', '📅 Start Month', subStartMonth || 'Not Set'],
                       ['INIT_BAL', '💵 Opening Bal', `₹${initialAmount}`],
                       ['PUBLIC_REG', '🌐 Public Reg', allowPublicReg ? 'ACTIVE (ON)' : 'DISABLED (OFF)']
@@ -1916,12 +1967,13 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
             {configModal !== 'PUBLIC_REG' && (
               <input
                 type={configModal === 'SUB_START' ? 'month' : 'text'}
-                placeholder={configModal === 'GPAY_NUM' ? 'Enter G-Pay / PhonePe Number' : ''}
+                placeholder={configModal === 'GPAY_NUM' ? 'Enter G-Pay / PhonePe Number' : configModal === 'ADMIN_MOB' ? 'e.g. 919876543210 (include country code)' : ''}
                 value={
                   configModal === 'SUB_AMOUNT' ? subAmount :
                   configModal === 'PRI_UPI' ? primaryUpi :
                   configModal === 'SEC_UPI' ? secondaryUpi :
                   configModal === 'GPAY_NUM' ? gpayNumber :
+                  configModal === 'ADMIN_MOB' ? adminMobile :
                   configModal === 'SUB_START' ? subStartMonth : initialAmount
                 }
                 onChange={e => {
@@ -1930,6 +1982,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                   else if (configModal === 'PRI_UPI') setPrimaryUpi(v);
                   else if (configModal === 'SEC_UPI') setSecondaryUpi(v);
                   else if (configModal === 'GPAY_NUM') setGpayNumber(v);
+                  else if (configModal === 'ADMIN_MOB') setAdminMobile(v.replace(/\D/g, ''));
                   else if (configModal === 'SUB_START') setSubStartMonth(v);
                   else setInitialAmount(v);
                 }}
@@ -1947,6 +2000,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                 else if (configModal === 'PRI_UPI') up.primary_upi = primaryUpi;
                 else if (configModal === 'SEC_UPI') up.secondary_upi = secondaryUpi;
                 else if (configModal === 'GPAY_NUM') up.gpay_phonepe_number = gpayNumber;
+                else if (configModal === 'ADMIN_MOB') up.admin_mobile = adminMobile;
                 else if (configModal === 'SUB_START') up.subscription_start_month = subStartMonth;
                 else if (configModal === 'PUBLIC_REG') up.allow_public_registration = !allowPublicReg;
                 else up.initial_amount = initialAmount;

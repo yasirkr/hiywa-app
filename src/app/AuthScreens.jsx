@@ -7,6 +7,8 @@ import {
   SCHOOL_TYPES, COLLEGE_TYPES, GENDERS, BLOOD_GROUPS,
   NATIVE_PLACES, MARITAL_STATUS, MEDIUMS
 } from './theme';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 
 // ==========================================
 // 0. INITIAL APP OPEN SPLASH CARD (MOBILE & WEB)
@@ -106,8 +108,12 @@ export function LoginScreen({ onNavigate, onLogin }) {
           if (userData.membership_status === 'INACTIVE' || userData.membership_status === 'DECEASED') {
             return alert('Login Failed: Your account is deactivated. Contact Admin.');
           }
-          if (password === 'Hiywa@123') setForcePassUser(userData);
-          else onLogin(userData);
+          if (password === 'Hiywa@123') {
+            setForcePassUser(userData);
+          } else {
+            registerForPushNotificationsAsync(userData.official_id);
+            onLogin(userData);
+          }
         } else alert('Login Failed: Incorrect Password');
       } else alert('Login Failed: Official ID not found');
     } catch (error) {
@@ -134,6 +140,7 @@ export function LoginScreen({ onNavigate, onLogin }) {
         details: `${forcePassUser.full_name} (${forcePassUser.official_id}) updated their login password.`
       });
       alert('Password updated successfully!');
+      registerForPushNotificationsAsync(forcePassUser.official_id);
       onLogin({ ...forcePassUser, password: newPassword });
     } catch (error) {
       alert('Failed to update password: ' + error.message);
@@ -550,4 +557,36 @@ export function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false
       </form>
     </div>
   );
+}
+
+
+export async function registerForPushNotificationsAsync(userId) {
+  if (Platform.OS === 'web') return; // Push doesn't apply to standard web yet
+  
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return;
+    
+    // Find your projectId in app.json (extra.eas.projectId)
+    const token = (await Notifications.getExpoPushTokenAsync({
+      projectId: '68e080fa-0050-4689-aa2d-100f14d9f83f', 
+    })).data;
+    
+    try {
+      await updateDoc(doc(db, 'members', userId), { expo_push_token: token });
+    } catch (e) {}
+  }
 }

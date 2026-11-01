@@ -12,7 +12,7 @@ import {
 // 0. REUSABLE MANUAL PAYMENT INSTRUCTIONS MODAL (UPI / G-PAY / PHONEPE)
 // ==========================================
 export function ManualPayModal({ visible, onClose, title = "Manual Payment Instructions", subtitle = "" }) {
-  const [payInfo, setPayInfo] = useState({ primary_upi: '', secondary_upi: '', gpay_phonepe_number: '' });
+  const [payInfo, setPayInfo] = useState({ primary_upi: '', secondary_upi: '', gpay_phonepe_number: '', admin_mobile: '' });
   const [copiedKey, setCopiedKey] = useState('');
 
   useEffect(() => {
@@ -23,7 +23,8 @@ export function ManualPayModal({ visible, onClose, title = "Manual Payment Instr
           setPayInfo({
             primary_upi: d.primary_upi || 'Not Set',
             secondary_upi: d.secondary_upi || '',
-            gpay_phonepe_number: d.gpay_phonepe_number || 'Not Set'
+            gpay_phonepe_number: d.gpay_phonepe_number || 'Not Set',
+            admin_mobile: d.admin_mobile || 'Not Set'
           });
         }
       }).catch(() => {});
@@ -49,8 +50,9 @@ export function ManualPayModal({ visible, onClose, title = "Manual Payment Instr
         </div>
         <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>{title}</h3>
         {!!subtitle && <p style={{ margin: '0 0 8px 0', fontSize: '11px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>{subtitle}</p>}
+        
         <p style={{ margin: '0 0 14px 0', fontSize: '11px', color: '#475569', lineHeight: '1.45', fontWeight: '600' }}>
-          Please transfer your contribution manually using any of the details below and <strong>inform the Admin</strong> to update your payment record:
+          <span style={{fontWeight: '900', color: '#0a192f'}}>Step 1:</span> Transfer your contribution manually using any of the details below.
         </p>
 
         <div style={{ backgroundColor: '#f8fafc', borderRadius: '14px', padding: '12px', border: '1px dashed #cbd5e1', textAlign: 'left', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -91,8 +93,29 @@ export function ManualPayModal({ visible, onClose, title = "Manual Payment Instr
           </div>
         </div>
 
+        {/* STEP 2: WHATSAPP BUTTON */}
+        <div style={{ backgroundColor: '#f0fdf4', borderRadius: '14px', padding: '12px', border: '1px solid #bbf7d0', textAlign: 'left', marginBottom: '16px' }}>
+          <span style={{ display: 'block', fontSize: '10px', fontWeight: '900', color: '#166534', textTransform: 'uppercase', marginBottom: '4px' }}>✅ Step 2: Update Your Record</span>
+          <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#15803d', fontWeight: '700', lineHeight: '1.4' }}>Send the successful payment screenshot to the Admin to immediately update your ledger.</p>
+          
+          {payInfo.admin_mobile && payInfo.admin_mobile !== 'Not Set' ? (
+            <button 
+              onClick={() => {
+                const waUrl = `https://wa.me/${payInfo.admin_mobile.replace(/\D/g, '')}?text=Assalamu%20Alaikum%20Admin.%20Here%20is%20my%20payment%20screenshot%20for%20${encodeURIComponent(title)}.`;
+                if (Platform.OS === 'web') window.open(waUrl, '_blank');
+                else Linking.openURL(waUrl);
+              }} 
+              style={{ width: '100%', backgroundColor: '#22c55e', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 10px rgba(34,197,94,0.3)' }}
+            >
+              💬 WhatsApp Screenshot To Admin
+            </button>
+          ) : (
+            <p style={{ margin: 0, fontSize: '9px', fontWeight: '800', color: '#ef4444', fontStyle: 'italic' }}>Admin WhatsApp number not set.</p>
+          )}
+        </div>
+
         <button onClick={onClose} style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #1e3a8a 0%, #0a192f 100%)', color: '#fbbf24', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer' }}>
-          Got It
+          Close
         </button>
       </div>
     </div>
@@ -146,12 +169,12 @@ export function GoverningBodyWidget({ isEditing = false }) {
           padding: isPresident ? '14px 16px' : '12px 10px',
           border: isPresident ? '1.5px solid #d97706' : '1px solid #cbd5e1',
           display: 'flex',
-          flexDirection: isPresident ? 'row' : 'column',
+          flexDirection: isPresident && !isEditing ? 'row' : 'column',
           alignItems: 'center',
-          gap: isPresident ? '14px' : '8px',
+          gap: isPresident && !isEditing ? '14px' : '8px',
           cursor: (!isEditing && u) ? 'pointer' : 'default',
           boxShadow: isPresident ? '0 8px 20px rgba(10,25,47,0.2)' : '0 2px 8px rgba(0,0,0,0.03)',
-          textAlign: isPresident ? 'left' : 'center',
+          textAlign: isPresident && !isEditing ? 'left' : 'center',
           position: 'relative'
         }}
       >
@@ -267,7 +290,7 @@ export function GoverningBodyWidget({ isEditing = false }) {
 
       {/* EXECUTIVE & ADVISORY COMMITTEES */}
       {renderCommitteeSection('Executive_Members', 'Executive Committee Members', '#1e3a8a')}
-      {renderCommitteeSection('Special_Members', 'Special Invitees & Advisors', '#d97706')}
+      {renderCommitteeSection('Special_Members', 'Special Advisors', '#d97706')}
 
       {/* COMPACT MEMBER PROFILE MODAL ON CLICK */}
       {previewMember && (
@@ -364,6 +387,7 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
   const [activeCampaigns, setActiveCampaigns] = useState([]);
   const [subStartMonth, setSubStartMonth] = useState('');
   const [customSlider, setCustomSlider] = useState([]);
+  const [adminMobile, setAdminMobile] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showDonatePayModal, setShowDonatePayModal] = useState(false);
@@ -405,8 +429,8 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
   let duesMonths = 0;
   const isFutureStart = subStartMonth && new Date(`${subStartMonth}-01`) > new Date();
   
-  // Ensures dues ONLY calculate if the admin has explicitly started their subscription
-  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started;
+  // Ensures dues ONLY calculate for active members (Exempts Core Admins and Inactive users)
+  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started || currentUser?.is_core_admin || currentUser?.membership_status !== 'ACTIVE';
 
   if (currentUser?.role !== 'STUDENT' && !isSubsDisabled) {
     // Uses individual start date if available, fallback to join date
@@ -542,13 +566,13 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
                 padding: '14px', textAlign: 'center'
               }}>
                 <span style={{ backgroundColor: 'rgba(251,191,36,0.2)', border: '1px solid #fbbf24', color: '#fef08a', padding: '2px 9px', borderRadius: '14px', fontSize: '8px', fontWeight: '900', letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: '6px' }}>
-                  MTK PURAM • EST. 2001
+                  EST. 1998
                 </span>
                 <h1 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '900', color: '#fbbf24', textShadow: '0 2px 8px rgba(0,0,0,0.7)', letterSpacing: '0.5px' }}>
-                  🎉 25 YEARS OF HIYWA 🎉
+                  25 YEARS OF HIYWA
                 </h1>
                 <p style={{ margin: 0, fontSize: '10px', fontWeight: '800', color: '#ffffff', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
-                  SILVER JUBILEE CELEBRATION
+                  SILVER JUBILEE
                 </p>
                 {activeSlider.length > 1 && (
                   <div style={{ position: 'absolute', bottom: '8px', display: 'flex', gap: '4px' }}>
@@ -609,12 +633,22 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
               
               <div onClick={() => onNavigate('governing')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>🏛️</span>
-                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Gov. Body</span>
+                <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Committee</span>
               </div>
 
               <div onClick={() => onNavigate('ramadan')} style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '12px 4px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                 <span style={{ fontSize: '20px' }}>🌙</span>
                 <span style={{ fontSize: '8px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Ramadan</span>
+              </div>
+
+              <div onClick={() => {
+                if (!adminMobile || adminMobile === 'Not Set') return alert('Admin WhatsApp number is not configured.');
+                const waUrl = `https://wa.me/${adminMobile.replace(/\D/g, '')}?text=Assalamu%20Alaikum%20Admin,%20`;
+                if (Platform.OS === 'web') window.open(waUrl, '_blank');
+                else Linking.openURL(waUrl);
+              }} style={{ backgroundColor: '#f0fdf4', borderRadius: '14px', padding: '12px 4px', border: '1px solid #bbf7d0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                <span style={{ fontSize: '20px' }}>💬</span>
+                <span style={{ fontSize: '8px', color: '#166534', fontWeight: '900', textTransform: 'uppercase', textAlign: 'center' }}>Admin WA</span>
               </div>
             </div>
 
@@ -785,7 +819,8 @@ export function SubscriptionScreen({ currentUser, onViewReceipt, onBack }) {
   if (isPageLoading) return <div style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}><div style={{ height: '120px', backgroundColor: '#e2e8f0', borderRadius: '18px' }}></div></div>;
 
   const isFutureStart = subStartMonth && new Date(`${subStartMonth}-01`) > new Date();
-  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started;
+  // Exempt Core Admins and Inactive Users here as well
+  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started || currentUser?.is_core_admin || currentUser?.membership_status !== 'ACTIVE';
 
   const individualStart = currentUser?.subscription_start_date ? new Date(currentUser.subscription_start_date) : (currentUser?.join_date ? new Date(currentUser.join_date) : new Date());
   let startDate = individualStart;
@@ -823,7 +858,11 @@ export function SubscriptionScreen({ currentUser, onViewReceipt, onBack }) {
         {isSubsDisabled && (
           <div style={{ backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '12px', padding: '9px 12px', marginBottom: '10px', textAlign: 'center' }}>
             <span style={{ fontSize: '10px', fontWeight: '900', color: '#b45309' }}>
-              ⏳ {subStartMonth ? `Subscriptions start in ${new Date(subStartMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })}.` : 'Subscription tracking not yet active.'}
+              {currentUser?.is_core_admin ? '👑 Core Admins are exempt from subscription tracking.' : 
+               currentUser?.membership_status !== 'ACTIVE' ? '🚫 Your account is currently inactive.' : 
+               !currentUser?.subscription_started ? '⏳ Subscription tracking has not been initiated for your account yet.' : 
+               subStartMonth ? `⏳ Subscriptions start in ${new Date(subStartMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })}.` : 
+               '⏳ Subscription tracking not yet active.'}
             </span>
           </div>
         )}
@@ -1368,7 +1407,7 @@ export function RamadanScreen({ onBack }) {
       <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '20px', padding: '24px 18px', textAlign: 'center' }}>
         <div style={{ fontSize: '32px', marginBottom: '8px' }}>🌙</div>
         <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '900', color: '#d97706', textTransform: 'uppercase' }}>Ramadan Competition</h3>
-        <p style={{ margin: '0 0 14px 0', fontSize: '11px', color: '#b45309', fontWeight: '600', lineHeight: '1.4' }}>The HIYWA Ramadan Competition portal will open prior to the upcoming holy month of Ramadan.</p>
+        <p style={{ margin: '0 0 14px 0', fontSize: '11px', color: '#b45309', fontWeight: '600', lineHeight: '1.4' }}>Insha Allah, The HIYWA Ramadan Competition portal will open prior to the upcoming holy month of Ramadan.</p>
         <button onClick={onBack} style={{ padding: '8px 16px', backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>← Return Home</button>
       </div>
     </div>
