@@ -80,7 +80,23 @@ export default function Header({ currentUser, onNavigate, onLogout, isPublic = f
           });
         });
 
-        // 3. USER-SIDE ACTIVITY EVENTS (Profile Edits, Password Changes, etc. — No Admin Logs or Payment Alerts)
+        // 3. NEW MEMBER NOTIFICATIONS (ADMIN ONLY)
+        if (currentUser.role === 'ADMIN') {
+          const memSnap = await getDocs(collection(db, 'members'));
+          const newMembers = memSnap.docs.map(d => d.data()).filter(u => u.membership_status === 'ACTIVE' && u.role !== 'STUDENT' && !u.subscription_started);
+          
+          newMembers.forEach(m => {
+            notifs.push({
+              id: `new_mem_${m.official_id}`,
+              type: 'success',
+              text: `NEW REGISTRATION: ${m.full_name} (${m.official_id}) has joined. Tap to view profile.`,
+              targetView: 'admin_users',
+              payload: m // Pass the member object through the router to auto-open their profile
+            });
+          });
+        }
+
+        // 4. USER-SIDE ACTIVITY EVENTS (Profile Edits, Password Changes, etc. — No Admin Logs or Payment Alerts)
         const logsSnap = await getDocs(collection(db, 'system_logs'));
         const userEvents = logsSnap.docs
           .map(d => ({ id: d.id, ...d.data() }))
@@ -187,7 +203,7 @@ export default function Header({ currentUser, onNavigate, onLogout, isPublic = f
                   </div>
                 ) : (
                   visibleNotifications.map((notif) => (
-                    <div key={notif.id} onClick={() => { setShowDropdown(false); if (notif.targetView) onNavigate(notif.targetView); }} style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', backgroundColor: notif.type === 'success' ? '#f0fdf4' : notif.type === 'warning' ? '#fffbeb' : '#eff6ff' }}>
+                    <div key={notif.id} onClick={() => { setShowDropdown(false); if (notif.targetView) onNavigate(notif.targetView, notif.payload); }} style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', backgroundColor: notif.type === 'success' ? '#f0fdf4' : notif.type === 'warning' ? '#fffbeb' : '#eff6ff' }}>
                       <div style={{ marginTop: '1px', color: notif.type === 'success' ? '#10b981' : (notif.type === 'warning' ? '#f59e0b' : '#3b82f6') }}>
                         {notif.type === 'success' ? '👤' : notif.type === 'warning' ? '⚠️' : '📢'}
                       </div>

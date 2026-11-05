@@ -9,7 +9,7 @@ import {
 } from './theme';
 import { GoverningBodyWidget } from './MemberScreens';
 
-export default function AdminDashboard({ currentUser, setCurrentUser, activeTab, onNavigate, onLogout, onViewReceipt }) {
+export default function AdminDashboard({ currentUser, setCurrentUser, activeTab, navPayload, onNavigate, onLogout, onViewReceipt }) {
   const isCore = currentUser?.is_core_admin;
   const perms = currentUser?.admin_permissions || '[]';
   const hasPerm = (p) => isCore || perms.includes('ALL') || perms.includes(p);
@@ -18,8 +18,12 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
   const [globalTxns, setGlobalTxns] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
+  const [censusHouseholds, setCensusHouseholds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [showCensusModal, setShowCensusModal] = useState(false);
+  const [censusForm, setCensusForm] = useState(null);
   
 
   const logAdminEvent = async (action, details) => {
@@ -145,17 +149,25 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
 
       const logsSnap = await getDocs(collection(db, 'system_logs'));
       setSystemLogs(logsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      
+      const censusSnap = await getDocs(collection(db, 'census_households'));
+      setCensusHouseholds(censusSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {} finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    setSelectedDetailUser(null);
+    // If a specific member payload was passed via notification, instantly open their profile
+    if (navPayload && navPayload.official_id && (activeTab === 'USERS' || activeTab === 'STUDENTS')) {
+      setSelectedDetailUser(navPayload);
+    } else {
+      setSelectedDetailUser(null);
+    }
     setViewCampDonors(null);
     setViewClosedCamp(null);
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, navPayload]);
 
   // EXECUTING ACTIONS FROM THE ACTIONS PAGE & MODALS
   const executeAdminAction = async (u, actionType) => {
@@ -190,6 +202,42 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
       }
       fetchData();
     } catch (e) { alert('Action failed: ' + e.message); }
+  };
+
+  // MANUAL FULL DATABASE BACKUP HANDLER
+  const handleManualBackup = async () => {
+    if (!window.confirm('Download a complete backup of the database to your device?')) return;
+    setIsSubmitting(true);
+    try {
+      const backupData = { 
+        backup_date: new Date().toISOString(), 
+        collections: {} 
+      };
+
+      // Fetch all collections
+      const collectionsToBackup = ['members', 'transactions', 'campaigns', 'settings', 'system_logs'];
+      for (const colName of collectionsToBackup) {
+        const snap = await getDocs(collection(db, colName));
+        backupData.collections[colName] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+
+      // Trigger standard web download for the JSON file
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `HIYWA_Database_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      logAdminEvent('Manual Backup', 'Downloaded complete JSON database snapshot');
+      alert('Backup downloaded successfully! Keep this file secure.');
+    } catch (err) {
+      alert('Backup failed: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Financial & Dues Computations
@@ -353,6 +401,24 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
       fetchData();
     } catch (err) {
       alert('Wipe failed: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveCensus = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!censusForm.hof_name || !censusForm.native_place) return alert('Head of Family & Native Place are required.');
+    setIsSubmitting(true);
+    try {
+      const docId = censusForm.id || `CEN_${Date.now()}`;
+      const payload = { ...censusForm, id: docId, updated_at: new Date().toISOString() };
+      await setDoc(doc(db, 'census_households', docId), payload);
+      logAdminEvent(censusForm.id ? 'Updated Census' : 'Added Census', `Household: ${censusForm.hof_name}`);
+      setShowCensusModal(false);
+      fetchData();
+    } catch (err) {
+      alert('Failed to save census: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -1106,6 +1172,114 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
               </div>
             )}
 
+            {/* CENSUS MODULE */}
+            {activeTab === 'CENSUS' && (() => {
+              const totalPop = censusHouseholds.reduce((sum, h) => sum + 1 + (h.family_members?.length || 0), 0);
+              const emptyForm = { hof_name: '', phone: '', native_place: 'MAHARAJAPURAM', current_residence: '', housing_status: 'OWNED', income_bracket: 'BELOW 10K', zakat_eligible: 'NO', special_needs: '', family_members: [] };
+              const fList = censusHouseholds.filter(h => !searchQuery || h.hof_name.toLowerCase().includes(searchQuery.toLowerCase()));
+              const inp = { width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box', marginBottom: '8px', textTransform: 'uppercase' };
+              const lbl = { display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '2px' };
+
+              return (
+                <div>
+                  {/* CENSUS STATS HEADER */}
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '14px', border: '1px solid #cbd5e1', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '42px', height: '42px', backgroundColor: '#eff6ff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: '1px solid #bfdbfe' }}>📋</div>
+                      <div>
+                        <h3 style={{ margin: '0 0 2px 0', fontSize: '9.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Households</h3>
+                        <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1e3a8a' }}>{censusHouseholds.length}</p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ display: 'block', fontSize: '8px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Total Population</span>
+                      <span style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>{totalPop}</span>
+                    </div>
+                  </div>
+
+                  {/* SEARCH & ADD CONTROLS */}
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                    <input type="text" placeholder="Search Head of Family..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '11px', fontWeight: '700', outline: 'none' }} />
+                    <button onClick={() => { setCensusForm(emptyForm); setShowCensusModal(true); }} style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '0 14px', borderRadius: '10px', fontWeight: '900', fontSize: '9.5px', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add Family</button>
+                  </div>
+
+                  {/* HOUSEHOLDS LIST */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {fList.map((h, idx) => (
+                      <div key={h.id} onClick={() => { setCensusForm(h); setShowCensusModal(true); }} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '12px', border: '1px solid #cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{h.hof_name}</p>
+                          <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>{h.native_place} • {h.current_residence} • {1 + (h.family_members?.length || 0)} Members</p>
+                        </div>
+                        <span style={{ backgroundColor: h.zakat_eligible === 'YES' ? '#dcfce7' : '#f1f5f9', color: h.zakat_eligible === 'YES' ? '#16a34a' : '#64748b', padding: '4px 8px', borderRadius: '6px', fontSize: '8px', fontWeight: '900' }}>
+                          {h.zakat_eligible === 'YES' ? 'Zakat: YES' : 'Zakat: NO'}
+                        </span>
+                      </div>
+                    ))}
+                    {fList.length === 0 && <p style={{ fontSize: '10px', textAlign: 'center', color: '#94a3b8', padding: '20px 0', fontWeight: '800' }}>No census records found.</p>}
+                  </div>
+
+                  {/* FULL-SCREEN ADD/EDIT CENSUS MODAL */}
+                  {showCensusModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.7)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)', overflowY: 'auto' }}>
+                      <form onSubmit={handleSaveCensus} style={{ width: '100%', maxWidth: '400px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '18px', marginTop: '30px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>{censusForm.id ? 'Edit Household' : 'New Household'}</h4>
+                          <button type="button" onClick={() => setShowCensusModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '28px', height: '28px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+
+                        {/* SECTION 1: METADATA */}
+                        <h5 style={{ margin: '0 0 6px 0', fontSize: '10px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>1. Head of Family (HoF)</h5>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <div style={{ flex: '1 1 180px' }}><label style={lbl}>HoF Name *</label><input required style={inp} value={censusForm.hof_name} onChange={e => setCensusForm({ ...censusForm, hof_name: e.target.value.toUpperCase() })} /></div>
+                          <div style={{ flex: '1 1 120px' }}><label style={lbl}>Phone</label><input type="tel" style={inp} value={censusForm.phone} onChange={e => setCensusForm({ ...censusForm, phone: e.target.value.replace(/\D/g, '') })} /></div>
+                          <FormDropdown label="Native Place *" value={censusForm.native_place} options={NATIVE_PLACES} onSelect={v => setCensusForm({ ...censusForm, native_place: v })} />
+                          <div style={{ flex: '1 1 180px' }}><label style={lbl}>Current City / Area *</label><input required style={inp} value={censusForm.current_residence} onChange={e => setCensusForm({ ...censusForm, current_residence: e.target.value.toUpperCase() })} /></div>
+                        </div>
+
+                        {/* SECTION 2: ECONOMIC/WELFARE INDICATORS */}
+                        <h5 style={{ margin: '10px 0 6px 0', fontSize: '10px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>2. Economic Indicators</h5>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <FormDropdown label="Housing" value={censusForm.housing_status} options={['OWNED', 'RENTED', 'LEASE']} onSelect={v => setCensusForm({ ...censusForm, housing_status: v })} />
+                          <FormDropdown label="Mthly Income" value={censusForm.income_bracket} options={['BELOW 10K', '10K - 25K', '25K - 50K', '50K - 1L', 'ABOVE 1L']} onSelect={v => setCensusForm({ ...censusForm, income_bracket: v })} />
+                          <FormDropdown label="Zakat Eligible" value={censusForm.zakat_eligible} options={['YES', 'NO']} onSelect={v => setCensusForm({ ...censusForm, zakat_eligible: v })} />
+                          <div style={{ flex: '1 1 100%' }}><label style={lbl}>Special Needs (Widows, Ill, Disabled)</label><input style={inp} value={censusForm.special_needs} onChange={e => setCensusForm({ ...censusForm, special_needs: e.target.value.toUpperCase() })} placeholder="e.g. Heart Patient, Differently Abled" /></div>
+                        </div>
+
+                        {/* SECTION 3: DEPENDENTS / FAMILY */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 8px 0', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                          <h5 style={{ margin: 0, fontSize: '10px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>3. Dependents / Family ({censusForm.family_members.length})</h5>
+                          <button type="button" onClick={() => setCensusForm({ ...censusForm, family_members: [...censusForm.family_members, { name: '', relationship: 'SPOUSE', age: '', education: '', employment: '' }] })} style={{ backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', padding: '4px 8px', borderRadius: '6px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add Member</button>
+                        </div>
+                        
+                        <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                          {censusForm.family_members.map((fm, i) => (
+                            <div key={i} style={{ backgroundColor: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', position: 'relative' }}>
+                              <button type="button" onClick={() => { const nf = [...censusForm.family_members]; nf.splice(i, 1); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ position: 'absolute', top: '-5px', right: '-5px', backgroundColor: '#ef4444', color: '#fff', border: 'none', width: '20px', height: '20px', borderRadius: '50%', fontSize: '10px', fontWeight: '900', cursor: 'pointer', zIndex: 10 }}>✕</button>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <input placeholder="Name *" value={fm.name} onChange={e => { const nf = [...censusForm.family_members]; nf[i].name = e.target.value.toUpperCase(); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 120px', marginBottom: '4px' }} required />
+                                <select value={fm.relationship} onChange={e => { const nf = [...censusForm.family_members]; nf[i].relationship = e.target.value; setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 100px', marginBottom: '4px' }}>
+                                  <option value="SPOUSE">Spouse</option><option value="SON">Son</option><option value="DAUGHTER">Daughter</option><option value="FATHER">Father</option><option value="MOTHER">Mother</option><option value="SIBLING">Sibling</option><option value="OTHER">Other</option>
+                                </select>
+                                <input type="number" placeholder="Age *" value={fm.age} onChange={e => { const nf = [...censusForm.family_members]; nf[i].age = e.target.value; setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 50px', marginBottom: '4px' }} required />
+                                <input placeholder="Education / Class" value={fm.education} onChange={e => { const nf = [...censusForm.family_members]; nf[i].education = e.target.value.toUpperCase(); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 120px', marginBottom: 0 }} />
+                                <input placeholder="Job / School Name" value={fm.employment} onChange={e => { const nf = [...censusForm.family_members]; nf[i].employment = e.target.value.toUpperCase(); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 120px', marginBottom: 0 }} />
+                              </div>
+                            </div>
+                          ))}
+                          {censusForm.family_members.length === 0 && <p style={{ fontSize: '9px', color: '#94a3b8', textAlign: 'center', fontWeight: '800' }}>No dependents added.</p>}
+                        </div>
+
+                        <button type="submit" disabled={isSubmitting} style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                          {isSubmitting ? 'Saving...' : '💾 Save Household'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* 2A. REVERSE FLOW ADMIN ACTIONS PAGE */}
             {activeTab === 'ACTIONS' && (
               <div>
@@ -1117,7 +1291,10 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                     <button onClick={() => setActionModal('RESET')} style={{ padding: '14px 8px', backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>🔑</span> Reset Pass</button>
                     <button onClick={() => setActionModal('DEACTIVATE')} style={{ padding: '14px 8px', backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>🚫</span> Deactivate</button>
                     <button onClick={() => setActionModal('UPGRADE')} style={{ padding: '14px 8px', backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>🎓</span> Upgrade</button>
-                    <button onClick={() => setActionModal('DECEASED')} style={{ gridColumn: 'span 2', padding: '14px 8px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>⚰️</span> Mark Deceased</button>
+                    <button onClick={() => setActionModal('DECEASED')} style={{ padding: '14px 8px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '20px' }}>⚰️</span> Mark Deceased</button>
+                    <button onClick={handleManualBackup} disabled={isSubmitting} style={{ padding: '14px 8px', backgroundColor: '#f0fdfa', color: '#0f766e', border: '1px solid #ccfbf1', borderRadius: '12px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '20px' }}>💾</span> {isSubmitting ? '...' : 'DB Backup'}
+                    </button>
                   </div>
                 </div>
 

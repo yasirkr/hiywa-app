@@ -28,6 +28,7 @@ function MainAppContent() {
   const [showExitToast, setShowExitToast] = useState(false);
   const [adminMode, setAdminMode] = useState(false); // New global admin state
   const [updateAvailable, setUpdateAvailable] = useState(false); // NEW UPDATE STATE
+  const [navPayload, setNavPayload] = useState(null); // Stores data passed between screens (like selected profiles)
   const backPressCount = useRef(0);
 
   // Listen for the PWA Update Signal
@@ -97,8 +98,15 @@ function MainAppContent() {
     );
   }
 
-  const handleDashboardNav = (view, passedRole = null) => {
-    setRegisterRole(passedRole);
+  const handleDashboardNav = (view, passedPayload = null) => {
+    // Distinguish between registration role strings and notification profile objects
+    if (typeof passedPayload === 'string') {
+      setRegisterRole(passedPayload);
+      setNavPayload(null);
+    } else {
+      setNavPayload(passedPayload);
+      setRegisterRole(null);
+    }
     setCurrentView(view);
   };
 
@@ -139,6 +147,7 @@ function MainAppContent() {
               currentUser={currentUser}
               setCurrentUser={setCurrentUser}
               activeTab={currentView.replace('admin_', '').toUpperCase()}
+              navPayload={navPayload}
               onNavigate={handleDashboardNav}
               onLogout={() => setShowLogoutModal(true)}
               onViewReceipt={(txn) => { setSelectedReceipt(txn); setReceiptBackView(currentView); setCurrentView('receipt'); }}

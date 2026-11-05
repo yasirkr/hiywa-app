@@ -526,6 +526,7 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
               <AdminHomeTile id="STATS" icon="📊" label="Overview" perm="ALL" />
               <AdminHomeTile id="USERS" icon="👥" label="Members" perm="MANAGE_USERS" />
               <AdminHomeTile id="STUDENTS" icon="🎓" label="Students" perm="MANAGE_USERS" />
+              <AdminHomeTile id="CENSUS" icon="📋" label="Census" perm="MANAGE_USERS" />
               <AdminHomeTile id="SUBSCRIPTIONS" icon="📅" label="Dues" perm="MANAGE_FINANCE" />
               <AdminHomeTile id="FINANCE" icon="💵" label="Finance" perm="MANAGE_FINANCE" />
               <AdminHomeTile id="CAMPAIGNS" icon="📢" label="Causes" perm="MANAGE_CAMPAIGNS" />
