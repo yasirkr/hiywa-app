@@ -137,6 +137,7 @@ function MainAppContent() {
           {currentView.startsWith('admin_') && (
             <AdminDashboard
               currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
               activeTab={currentView.replace('admin_', '').toUpperCase()}
               onNavigate={handleDashboardNav}
               onLogout={() => setShowLogoutModal(true)}

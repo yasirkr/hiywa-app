@@ -9,7 +9,7 @@ import {
 } from './theme';
 import { GoverningBodyWidget } from './MemberScreens';
 
-export default function AdminDashboard({ currentUser, activeTab, onNavigate, onLogout, onViewReceipt }) {
+export default function AdminDashboard({ currentUser, setCurrentUser, activeTab, onNavigate, onLogout, onViewReceipt }) {
   const isCore = currentUser?.is_core_admin;
   const perms = currentUser?.admin_permissions || '[]';
   const hasPerm = (p) => isCore || perms.includes('ALL') || perms.includes(p);
@@ -162,7 +162,9 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
     const uid = u.official_id;
     try {
       if (actionType === 'START_SUB') {
-        await updateDoc(doc(db, 'members', uid), { subscription_started: true, subscription_start_date: new Date().toISOString() });
+        const startDate = new Date().toISOString();
+        await updateDoc(doc(db, 'members', uid), { subscription_started: true, subscription_start_date: startDate });
+        if (uid === currentUser.official_id && setCurrentUser) setCurrentUser({ ...currentUser, subscription_started: true, subscription_start_date: startDate });
         logAdminEvent('Started Subscription', uid);
         alert(`Success: Subscription started for ${u.full_name}!`);
       } else if (actionType === 'RESET') {
@@ -172,14 +174,17 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
       } else if (actionType === 'DEACTIVATE' || actionType === 'ACTIVATE') {
         const nextStatus = actionType === 'ACTIVATE' ? 'ACTIVE' : 'INACTIVE';
         await updateDoc(doc(db, 'members', uid), { membership_status: nextStatus });
+        if (uid === currentUser.official_id && setCurrentUser) setCurrentUser({ ...currentUser, membership_status: nextStatus });
         logAdminEvent(`Status ${nextStatus}`, uid);
         alert(`Success: ${u.full_name} status updated to ${nextStatus}`);
       } else if (actionType === 'DECEASED') {
         await updateDoc(doc(db, 'members', uid), { membership_status: 'DECEASED' });
+        if (uid === currentUser.official_id && setCurrentUser) setCurrentUser({ ...currentUser, membership_status: 'DECEASED' });
         logAdminEvent('Marked Deceased', uid);
         alert(`Success: ${u.full_name} marked as Deceased.`);
       } else if (actionType === 'UPGRADE') {
         await updateDoc(doc(db, 'members', uid), { role: 'MEMBER' });
+        if (uid === currentUser.official_id && setCurrentUser) setCurrentUser({ ...currentUser, role: 'MEMBER' });
         logAdminEvent('Upgraded Student', uid);
         alert(`Success: ${u.full_name} upgraded from Student to Member!`);
       }
