@@ -5,7 +5,7 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/fi
 import {
   db, FormDropdown, COUNTRY_CODES, EDU_CATEGORIES, CLASSES, ISLAMIC_QUALS,
   SCHOOL_TYPES, COLLEGE_TYPES, GENDERS, BLOOD_GROUPS,
-  NATIVE_PLACES, MARITAL_STATUS, MEDIUMS
+  NATIVE_PLACES, MARITAL_STATUS, MEDIUMS, EMPLOYMENT_STATUS
 } from './theme';
 
 // ==========================================
@@ -416,6 +416,7 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
         if (sDoc.exists()) {
           setSubStartMonth(sDoc.data().subscription_start_month || '');
           setCustomSlider(sDoc.data().slider_images || []);
+          setAdminMobile(sDoc.data().admin_mobile || '');
         }
         const campSnap = await getDocs(collection(db, 'campaigns'));
         setActiveCampaigns(campSnap.docs.map(d => d.data()).filter(c => c.status === 'ACTIVE' && (parseFloat(c.raised_amount) || 0) < (parseFloat(c.target_amount) || 1)));
@@ -429,8 +430,8 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
   let duesMonths = 0;
   const isFutureStart = subStartMonth && new Date(`${subStartMonth}-01`) > new Date();
   
-  // Ensures dues ONLY calculate for active members (Exempts Core Admins and Inactive users)
-  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started || currentUser?.is_core_admin || currentUser?.membership_status !== 'ACTIVE';
+  // Ensures dues ONLY calculate for active members (Inactive users exempt)
+  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started || currentUser?.membership_status !== 'ACTIVE';
 
   if (currentUser?.role !== 'STUDENT' && !isSubsDisabled) {
     // Uses individual start date if available, fallback to join date
@@ -819,8 +820,8 @@ export function SubscriptionScreen({ currentUser, onViewReceipt, onBack }) {
   if (isPageLoading) return <div style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}><div style={{ height: '120px', backgroundColor: '#e2e8f0', borderRadius: '18px' }}></div></div>;
 
   const isFutureStart = subStartMonth && new Date(`${subStartMonth}-01`) > new Date();
-  // Exempt Core Admins and Inactive Users here as well
-  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started || currentUser?.is_core_admin || currentUser?.membership_status !== 'ACTIVE';
+  // Exempt Inactive Users here as well
+  const isSubsDisabled = !subStartMonth || isFutureStart || !currentUser?.subscription_started || currentUser?.membership_status !== 'ACTIVE';
 
   const individualStart = currentUser?.subscription_start_date ? new Date(currentUser.subscription_start_date) : (currentUser?.join_date ? new Date(currentUser.join_date) : new Date());
   let startDate = individualStart;
@@ -858,8 +859,7 @@ export function SubscriptionScreen({ currentUser, onViewReceipt, onBack }) {
         {isSubsDisabled && (
           <div style={{ backgroundColor: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '12px', padding: '9px 12px', marginBottom: '10px', textAlign: 'center' }}>
             <span style={{ fontSize: '10px', fontWeight: '900', color: '#b45309' }}>
-              {currentUser?.is_core_admin ? '👑 Core Admins are exempt from subscription tracking.' : 
-               currentUser?.membership_status !== 'ACTIVE' ? '🚫 Your account is currently inactive.' : 
+              {currentUser?.membership_status !== 'ACTIVE' ? '🚫 Your account is currently inactive.' : 
                !currentUser?.subscription_started ? '⏳ Subscription tracking has not been initiated for your account yet.' : 
                subStartMonth ? `⏳ Subscriptions start in ${new Date(subStartMonth + '-01').toLocaleDateString('default', { month: 'short', year: 'numeric' })}.` : 
                '⏳ Subscription tracking not yet active.'}
@@ -1197,7 +1197,8 @@ export function UserProfileScreen({ currentUser, setCurrentUser }) {
                   <>
                     <FormDropdown label="Education Category" value={editForm.educational_qualification} options={EDU_CATEGORIES} onSelect={v => setEditForm({ ...editForm, educational_qualification: v })} />
                     <div style={{ flex: '1 1 200px' }}><label style={lbl}>Course / Specialization</label><input style={inp} value={editForm.course_details || ''} onChange={e => setEditForm({ ...editForm, course_details: e.target.value.toUpperCase() })} /></div>
-                    <div style={{ flex: '1 1 200px' }}><label style={lbl}>Occupation / Job</label><input style={inp} value={editForm.occupation || ''} onChange={e => setEditForm({ ...editForm, occupation: e.target.value.toUpperCase() })} /></div>
+                    <FormDropdown label="Employment Status" value={editForm.employment_status} options={EMPLOYMENT_STATUS} onSelect={v => setEditForm({ ...editForm, employment_status: v })} />
+                    <div style={{ flex: '1 1 200px' }}><label style={lbl}>Occupation Details</label><input style={inp} value={editForm.occupation || ''} onChange={e => setEditForm({ ...editForm, occupation: e.target.value.toUpperCase() })} /></div>
                   </>
                 )}
                 <FormDropdown label="Islamic Studies" value={editForm.islamic_studies} options={['YES', 'NO']} onSelect={v => setEditForm({ ...editForm, islamic_studies: v })} />
@@ -1236,7 +1237,7 @@ export function UserProfileScreen({ currentUser, setCurrentUser }) {
                 ['Native Place', currentUser?.native_place],
                 ['Current City', currentUser?.current_location],
                 ['Education', `${currentUser?.educational_qualification || currentUser?.class_grade || 'N/A'} (${currentUser?.course_details || currentUser?.school_name || ''})`],
-                ['Occupation', currentUser?.occupation],
+                ['Employment', `${currentUser?.employment_status || 'N/A'} ${currentUser?.occupation ? `(${currentUser?.occupation})` : ''}`],
                 ['Islamic Studies', currentUser?.islamic_studies === 'YES' ? `${currentUser?.islamic_qualification} (${currentUser?.madrasa_name || ''})` : 'NO'],
                 ['Address', currentUser?.address]
               ].map(([k, v]) => (

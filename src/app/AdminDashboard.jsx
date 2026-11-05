@@ -5,7 +5,7 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc } from '
 import {
   db, FormDropdown, FilterDropdown, COUNTRY_CODES, EDU_CATEGORIES, CLASSES, ISLAMIC_QUALS,
   SCHOOL_TYPES, COLLEGE_TYPES, GENDERS, BLOOD_GROUPS,
-  NATIVE_PLACES, MARITAL_STATUS, MEDIUMS
+  NATIVE_PLACES, MARITAL_STATUS, MEDIUMS, EMPLOYMENT_STATUS
 } from './theme';
 import { GoverningBodyWidget } from './MemberScreens';
 
@@ -199,7 +199,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
 
   const pendingDuesList = isSubsDisabled ? [] : directory
     // Ensure we ONLY include members whose subscription_started flag is explicitly true
-    .filter(u => !u.is_core_admin && (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE' && u.subscription_started)
+    .filter(u => (u.role === 'MEMBER' || u.role === 'ADMIN') && u.membership_status === 'ACTIVE' && u.subscription_started)
     .map(u => {
       // Prioritize their specific individual start date, fallback to join date
       const individualStart = u.subscription_start_date ? new Date(u.subscription_start_date) : (u.join_date ? new Date(u.join_date) : new Date());
@@ -263,7 +263,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
       "Role", "Membership Status", "Gender", "DOB", "Blood Group", "Marital Status",
       "Aadhaar Number", "Country Code", "Primary Mobile", "WhatsApp Number", "Student Mobile",
       "Email", "Native Place", "Current City", "Permanent Address",
-      "Education Category", "Course / Specialization", "Occupation",
+      "Education Category", "Course / Specialization", "Employment Status", "Occupation Details",
       "Class / Grade", "Institution Name", "Institution Type", "Institution Location", "Medium",
       "Islamic Studies", "Islamic Qualification", "Madrasa Name", "Madrasa Location",
       "Total Months Paid", "Join Date"
@@ -274,7 +274,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
       u.role, u.membership_status, u.gender, u.dob, u.blood_group, u.marital_status,
       u.aadhaar_number, u.country_code || '+91', u.phone_number, u.whatsapp_number, u.student_mobile,
       u.email, u.native_place, u.current_location, u.address,
-      u.educational_qualification, u.course_details, u.occupation,
+      u.educational_qualification, u.course_details, u.employment_status, u.occupation,
       u.class_grade, u.school_name, u.school_type, u.school_location, u.medium_of_instruction,
       u.islamic_studies, u.islamic_qualification, u.madrasa_name, u.madrasa_location,
       u.total_months_paid || 0, u.join_date ? new Date(u.join_date).toLocaleDateString('en-GB') : ''
@@ -850,7 +850,8 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                 <>
                   <FormDropdown label="Education Category" value={editFormData.educational_qualification} options={EDU_CATEGORIES} onSelect={v => setEditFormData({ ...editFormData, educational_qualification: v })} />
                   <div style={{ flex: '1 1 180px' }}><label style={lbl}>Course / Major</label><input style={inp} value={editFormData.course_details || ''} onChange={e => setEditFormData({ ...editFormData, course_details: e.target.value.toUpperCase() })} /></div>
-                  <div style={{ flex: '1 1 180px' }}><label style={lbl}>Occupation</label><input style={inp} value={editFormData.occupation || ''} onChange={e => setEditFormData({ ...editFormData, occupation: e.target.value.toUpperCase() })} /></div>
+                  <FormDropdown label="Employment Status" value={editFormData.employment_status} options={EMPLOYMENT_STATUS} onSelect={v => setEditFormData({ ...editFormData, employment_status: v })} />
+                  <div style={{ flex: '1 1 180px' }}><label style={lbl}>Occupation Details</label><input style={inp} value={editFormData.occupation || ''} onChange={e => setEditFormData({ ...editFormData, occupation: e.target.value.toUpperCase() })} /></div>
                 </>
               )}
 
@@ -911,7 +912,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               ['Native Place', u.native_place],
               ['Current City', u.current_location],
               ['Education', `${u.educational_qualification || u.class_grade || 'N/A'} (${u.course_details || u.school_name || ''})`],
-              ['Occupation', u.occupation],
+              ['Employment', `${u.employment_status || 'N/A'} ${u.occupation ? `(${u.occupation})` : ''}`],
               ['Islamic Studies', u.islamic_studies === 'YES' ? `${u.islamic_qualification} (${u.madrasa_name || ''})` : 'NO'],
               ['Subscription Active', u.subscription_started ? 'YES (TRACKED)' : 'NO (PAUSED)'],
               ['Address', u.address]
@@ -1019,6 +1020,23 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
                       <span style={{ color: '#1e3a8a' }}>ISLAMIC SCHOLARS (AALIM / HAAFIZH)</span>
                       <span style={{ color: '#1e3a8a' }}>{directory.filter(u => u.islamic_studies === 'YES').length}</span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Employment Status Breakdown */}
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', padding: '14px', border: '1px solid #cbd5e1' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '10px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>5. Employment Status Breakdown</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {EMPLOYMENT_STATUS.map(status => {
+                      const cnt = directory.filter(u => u.employment_status === status).length;
+                      if (cnt === 0) return null; // Hides the row if nobody has this status yet
+                      return (
+                        <div key={status} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '9.5px', fontWeight: '800' }}>
+                          <span style={{ color: '#475569' }}>{status}</span>
+                          <span style={{ color: '#1e3a8a', fontWeight: '900' }}>{cnt}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1853,13 +1871,13 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
 
       {/* ACTION SELECTION MODAL */}
       {actionModal && (() => {
-        let eligibleUsers = directory.filter(u => !u.is_core_admin);
+        let eligibleUsers = directory;
         let title = '';
         if (actionModal === 'START_SUB') { title = 'Start Subscription'; eligibleUsers = eligibleUsers.filter(u => u.role !== 'STUDENT' && u.membership_status === 'ACTIVE' && !u.subscription_started); }
-        else if (actionModal === 'RESET') { title = 'Reset Password'; eligibleUsers = eligibleUsers.filter(u => u.membership_status === 'ACTIVE'); }
-        else if (actionModal === 'DEACTIVATE') { title = 'Deactivate Account'; eligibleUsers = eligibleUsers.filter(u => u.membership_status === 'ACTIVE'); }
-        else if (actionModal === 'UPGRADE') { title = 'Upgrade Student'; eligibleUsers = eligibleUsers.filter(u => u.role === 'STUDENT' && u.membership_status === 'ACTIVE'); }
-        else if (actionModal === 'DECEASED') { title = 'Mark Deceased'; eligibleUsers = eligibleUsers.filter(u => u.membership_status !== 'DECEASED'); }
+        else if (actionModal === 'RESET') { title = 'Reset Password'; eligibleUsers = eligibleUsers.filter(u => !u.is_core_admin && u.membership_status === 'ACTIVE'); }
+        else if (actionModal === 'DEACTIVATE') { title = 'Deactivate Account'; eligibleUsers = eligibleUsers.filter(u => !u.is_core_admin && u.membership_status === 'ACTIVE'); }
+        else if (actionModal === 'UPGRADE') { title = 'Upgrade Student'; eligibleUsers = eligibleUsers.filter(u => !u.is_core_admin && u.role === 'STUDENT' && u.membership_status === 'ACTIVE'); }
+        else if (actionModal === 'DECEASED') { title = 'Mark Deceased'; eligibleUsers = eligibleUsers.filter(u => !u.is_core_admin && u.membership_status !== 'DECEASED'); }
 
         const filteredList = eligibleUsers.filter(u => !actionSearchQuery || u.full_name?.toLowerCase().includes(actionSearchQuery.toLowerCase()) || u.official_id?.toLowerCase().includes(actionSearchQuery.toLowerCase()));
 
@@ -1873,9 +1891,7 @@ export default function AdminDashboard({ currentUser, activeTab, onNavigate, onL
               <input type="text" placeholder="Search Member / Student..." value={actionSearchQuery} onChange={e => setActionSearchQuery(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '14px', fontSize: '11px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }} />
               
               <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {!actionSearchQuery || actionSearchQuery.trim() === '' ? (
-                    <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', fontWeight: '800', padding: '20px 0' }}>Type a name or ID to search...</p>
-                  ) : filteredList.length === 0 ? (
+                  {filteredList.length === 0 ? (
                     <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', fontWeight: '800', padding: '20px 0' }}>No eligible members found.</p>
                   ) : (
                     filteredList.map(u => (

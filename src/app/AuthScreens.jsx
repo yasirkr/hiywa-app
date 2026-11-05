@@ -5,7 +5,7 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/fi
 import {
   db, FormDropdown, COUNTRY_CODES, EDU_CATEGORIES, CLASSES, ISLAMIC_QUALS,
   SCHOOL_TYPES, COLLEGE_TYPES, GENDERS, BLOOD_GROUPS,
-  NATIVE_PLACES, MARITAL_STATUS, MEDIUMS
+  NATIVE_PLACES, MARITAL_STATUS, MEDIUMS, EMPLOYMENT_STATUS
 } from './theme';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -291,7 +291,7 @@ export function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false
   const [formData, setFormData] = useState({
     full_name: '', father_name: '', mother_name: '', parents_status: '', gender: '', dob: '',
     blood_group: '', native_place: '', country_code: '+91', phone_number: '', email: '', address: '', password: '',
-    whatsapp_number: '', aadhaar_input: '', current_location: '', occupation: '',
+    whatsapp_number: '', aadhaar_input: '', current_location: '', employment_status: '', occupation: '',
     educational_qualification: '', course_details: '', marital_status: '', student_mobile: '',
     class_grade: '', school_name: '', medium_of_instruction: '', school_type: '', school_location: '',
     profile_photo: null, islamic_studies: 'NO', islamic_qualification: '', madrasa_name: '', madrasa_location: ''
@@ -462,7 +462,8 @@ export function RegisterScreen({ onBack, defaultRole = null, isAdminAuth = false
             <>
               <FormDropdown label="Education Category" value={formData.educational_qualification} options={EDU_CATEGORIES} onSelect={v => setFormData({ ...formData, educational_qualification: v })} />
               <div style={{ flex: '1 1 200px' }}><label style={compactLabel}>Course / Specialization</label><input style={compactInput} value={formData.course_details} onChange={e => setFormData({ ...formData, course_details: e.target.value.toUpperCase() })} /></div>
-              <div style={{ flex: '1 1 200px' }}><label style={compactLabel}>Occupation / Job</label><input style={compactInput} value={formData.occupation} onChange={e => setFormData({ ...formData, occupation: e.target.value.toUpperCase() })} /></div>
+              <FormDropdown label="Employment Status" value={formData.employment_status} options={EMPLOYMENT_STATUS} onSelect={v => setFormData({ ...formData, employment_status: v })} />
+              <div style={{ flex: '1 1 200px' }}><label style={compactLabel}>Occupation Details</label><input style={compactInput} value={formData.occupation} onChange={e => setFormData({ ...formData, occupation: e.target.value.toUpperCase() })} /></div>
             </>
           ) : (
             <>
