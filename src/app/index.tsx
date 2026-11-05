@@ -27,7 +27,17 @@ function MainAppContent() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showExitToast, setShowExitToast] = useState(false);
   const [adminMode, setAdminMode] = useState(false); // New global admin state
+  const [updateAvailable, setUpdateAvailable] = useState(false); // NEW UPDATE STATE
   const backPressCount = useRef(0);
+
+  // Listen for the PWA Update Signal
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handleUpdate = () => setUpdateAvailable(true);
+      window.addEventListener('hiywa-update-available', handleUpdate);
+      return () => window.removeEventListener('hiywa-update-available', handleUpdate);
+    }
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -185,6 +195,27 @@ function MainAppContent() {
       {showExitToast && (
         <div style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#0a192f', color: '#ffffff', padding: '8px 16px', borderRadius: '20px', fontSize: '10px', fontWeight: '800', zIndex: 10000, boxShadow: '0 8px 16px rgba(0,0,0,0.2)' }}>
           Press back again to log out
+        </div>
+      )}
+
+      {/* PWA UPDATE MODAL */}
+      {updateAvailable && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.85)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(5px)' }}>
+          <div style={{ width: '100%', maxWidth: '280px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px 20px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid #cbd5e1' }}>
+            <div style={{ width: '56px', height: '56px', backgroundColor: '#eff6ff', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', color: '#1e3a8a', fontSize: '28px', border: '1px solid #bfdbfe' }}>
+              🚀
+            </div>
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', color: '#0a192f', fontWeight: '900', textTransform: 'uppercase' }}>Update Available!</h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '11px', color: '#475569', lineHeight: '1.5', fontWeight: '600' }}>
+              A new version of HIYWA Connect has been released. Please install the update to continue.
+            </p>
+            <button 
+              onClick={() => window.location.reload(true)} 
+              style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #1e3a8a 0%, #0a192f 100%)', color: '#fbbf24', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer', boxShadow: '0 8px 20px rgba(30,58,138,0.3)' }}
+            >
+              Install Update
+            </button>
+          </div>
         </div>
       )}
     </View>

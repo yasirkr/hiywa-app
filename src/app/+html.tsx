@@ -21,6 +21,21 @@ export default function Root({ children }: { children: React.ReactNode }) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(registration) {
                     console.log('ServiceWorker registration successful');
+                    
+                    // 1. Force the browser to check for a new Firebase deployment instantly
+                    registration.update();
+
+                    // 2. Listen for the new update downloading
+                    registration.onupdatefound = function() {
+                      const installingWorker = registration.installing;
+                      installingWorker.onstatechange = function() {
+                        // 3. When the new code is fully downloaded, send a signal to React!
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                          console.log('New update found! Alerting React...');
+                          window.dispatchEvent(new Event('hiywa-update-available'));
+                        }
+                      };
+                    };
                   }).catch(function(err) {
                     console.log('ServiceWorker registration failed: ', err);
                   });
