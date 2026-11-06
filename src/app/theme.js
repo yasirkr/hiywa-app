@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Platform, Alert } from 'react-native';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
@@ -14,6 +15,15 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
+
+// Initialize App Check (Fraud Defense / Enterprise)
+if (typeof window !== 'undefined') {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider('6LfHZhIuAAAAAHJ-1V1lZuR0vR2mLiFqGpf9hL1G'),
+    isTokenAutoRefreshEnabled: true
+  });
+}
+
 export const db = getFirestore(app);
 
 // --- ROYAL NAVY & GOLD THEME PALETTE ---
