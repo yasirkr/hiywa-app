@@ -57,6 +57,12 @@ function MainAppContent() {
           return;
         }
         
+        // Intercept physical back button for internal page states/modals
+        if (typeof window !== 'undefined' && window.hiywaInternalBack && window.hiywaInternalBack()) {
+          window.history.pushState(null, '', window.location.href); // Keep user on current URL
+          return;
+        }
+        
         // Everything else safely returns to 'home' (the Workspace)
         if (currentView === 'register') setCurrentView('login');
         else if (currentView === 'campaignDetail') setCurrentView('fundraising');

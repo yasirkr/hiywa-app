@@ -174,6 +174,53 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
     fetchData();
   }, [activeTab, navPayload]);
 
+  // PHYSICAL BACK BUTTON INTERCEPTOR FOR INTERNAL VIEWS & MODALS
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.hiywaInternalBack = () => {
+        // Census Flow (Deepest layers close first)
+        if (showCensusModal) { setShowCensusModal(false); return true; }
+        if (isAddFamilyMemberModalOpen) { setIsAddFamilyMemberModalOpen(false); return true; }
+        if (isViewMembersModalOpen) { setIsViewMembersModalOpen(false); return true; }
+        if (activeHof) { setActiveHof(null); return true; }
+        
+        // Users / Students Flow
+        if (isEditingUser) { setIsEditingUser(false); return true; }
+        if (selectedDetailUser) { setSelectedDetailUser(null); return true; }
+        
+        // Drives / Campaigns Flow
+        if (viewCampDonors) { setViewCampDonors(null); return true; }
+        if (viewClosedCamp) { setViewClosedCamp(null); return true; }
+        if (showCampaignModal) { setShowCampaignModal(false); return true; }
+        if (campCashModalVisible) { setCampCashModalVisible(false); return true; }
+        if (statusRemarkModal) { setStatusRemarkModal(null); return true; }
+        
+        // Contributions / Finance Flow
+        if (viewMemberContrib) { setViewMemberContrib(null); return true; }
+        if (expenseModalVisible) { setExpenseModalVisible(false); return true; }
+        if (guestModalVisible) { setGuestModalVisible(false); return true; }
+        if (cashModalVisible) { setCashModalVisible(false); return true; }
+        if (showDuesModal) { setShowDuesModal(false); return true; }
+        if (showCumulativeModal) { setShowCumulativeModal(false); return true; }
+        
+        // Admin Actions & Settings Flow
+        if (actionModal) { setActionModal(null); return true; }
+        if (masterResetModal) { setMasterResetModal(false); return true; }
+        if (promoteModalVisible) { setPromoteModalVisible(false); return true; }
+        if (configModal) { setConfigModal(null); return true; }
+        if (showSliderModal) { setShowSliderModal(false); return true; }
+
+        return false; // If nothing is open, let the global router safely go back to Home
+      };
+    }
+  }, [
+    showCensusModal, isAddFamilyMemberModalOpen, isViewMembersModalOpen, activeHof, 
+    isEditingUser, selectedDetailUser, 
+    viewCampDonors, viewClosedCamp, showCampaignModal, campCashModalVisible, statusRemarkModal,
+    viewMemberContrib, expenseModalVisible, guestModalVisible, cashModalVisible, showDuesModal, showCumulativeModal,
+    actionModal, masterResetModal, promoteModalVisible, configModal, showSliderModal
+  ]);
+
   // EXECUTING ACTIONS FROM THE ACTIONS PAGE & MODALS
   const executeAdminAction = async (u, actionType) => {
     const uid = u.official_id;
@@ -413,7 +460,9 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
 
   const handleSaveCensus = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!censusForm.hof_name || !censusForm.native_place) return alert('Head of Family & Native Place are required.');
+    if (!censusForm.hof_name || !censusForm.age || !censusForm.native_place || !censusForm.street || !censusForm.current_residence || !censusForm.housing_status || !censusForm.income_bracket || !censusForm.zakat_eligible || !censusForm.special_needs) {
+      return alert('Please fill all mandatory (*) fields.');
+    }
     setIsSubmitting(true);
     try {
       const docId = censusForm.id || `CEN_${Date.now()}`;
@@ -1203,7 +1252,7 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
             {/* CENSUS MODULE */}
             {activeTab === 'CENSUS' && (() => {
               const totalPop = censusHouseholds.reduce((sum, h) => sum + 1 + (h.family_members?.length || 0), 0);
-              const emptyForm = { hof_name: '', phone: '', country_code: '+91', native_place: 'MAHARAJAPURAM', current_residence: '', housing_status: 'OWNED', income_bracket: 'BELOW 10K', zakat_eligible: 'NO', special_needs: 'NONE', family_members: [] };
+              const emptyForm = { hof_name: '', age: '', phone: '', country_code: '+91', native_place: '', door_no: '', street: '', current_residence: '', housing_status: '', income_bracket: '', zakat_eligible: '', special_needs: '', family_members: [] };
               const fList = censusHouseholds.filter(h => !searchQuery || h.hof_name.toLowerCase().includes(searchQuery.toLowerCase()));
               const inp = { width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '11px', fontWeight: '700', boxSizing: 'border-box', marginBottom: '8px', textTransform: 'uppercase' };
               const lbl = { display: 'block', fontSize: '8.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '2px' };
@@ -1221,8 +1270,9 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                       <div style={{ marginBottom: '16px' }}>
                         <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>{activeHof.hof_name}</h2>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                          <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>📞 {activeHof.country_code || '+91'} {activeHof.phone || 'N/A'}</p>
-                          <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>📍 {activeHof.current_residence} (Native: {activeHof.native_place})</p>
+                          <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>📞 {activeHof.country_code || '+91'} {activeHof.phone || 'N/A'} • 🧑 Age: {activeHof.age || 'N/A'}</p>
+                          <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>📍 {activeHof.door_no ? `${activeHof.door_no}, ` : ''}{activeHof.street || 'N/A'}</p>
+                          <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>🏙️ {activeHof.current_residence} (Native: {activeHof.native_place})</p>
                           <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>🏠 Housing: {activeHof.housing_status || 'N/A'} • 💰 Income: {activeHof.income_bracket || 'N/A'}</p>
                           <p style={{ margin: 0, fontSize: '10.5px', color: '#0f172a', fontWeight: '800' }}>🤲 Zakat Eligible: {activeHof.zakat_eligible || 'NO'}</p>
                           {activeHof.special_needs && activeHof.special_needs !== 'NONE' && (
@@ -1276,13 +1326,27 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                           <div style={{ width: '42px', height: '42px', backgroundColor: '#eff6ff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', border: '1px solid #bfdbfe' }}>📋</div>
                           <div>
                             <h3 style={{ margin: '0 0 2px 0', fontSize: '9.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Households</h3>
-                            <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1e3a8a' }}>{censusHouseholds.length}</p>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                              <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1e3a8a' }}>{censusHouseholds.length}</p>
+                              <span style={{ fontSize: '10px', fontWeight: '800', color: '#64748b' }}>({totalPop} People)</span>
+                            </div>
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ display: 'block', fontSize: '8px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Total Population</span>
-                          <span style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>{totalPop}</span>
-                        </div>
+                        <button 
+                          onClick={() => {
+                            const headers = ["Household ID", "HOF Name", "Age", "Country Code", "Phone", "Native Place", "Door No", "Street", "Current City", "Housing Status", "Monthly Income", "Zakat Eligible", "Special Needs", "Total Dependents", "Dependents Details"].join(",") + "\n";
+                            const rows = censusHouseholds.map(h => {
+                              const dependents = (h.family_members || []).map(m => `${m.name} (${m.relationship} - ${m.age} Yrs)`).join(" | ");
+                              return [
+                                h.id, h.hof_name, h.age || '', h.country_code || '+91', h.phone || '', h.native_place, h.door_no || '', h.street || '', h.current_residence, h.housing_status, h.income_bracket, h.zakat_eligible, h.special_needs, (h.family_members?.length || 0), dependents
+                              ].map(cleanCSV).join(",");
+                            }).join("\n");
+                            downloadCSV(headers + rows, "HIYWA_Census_Report.csv");
+                          }}
+                          style={{ backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', padding: '9px 12px', borderRadius: '10px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <span style={{ fontSize: '14px' }}>📥</span> CSV
+                        </button>
                       </div>
 
                       {/* SEARCH & ADD CONTROLS */}
@@ -1324,26 +1388,57 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                         <h5 style={{ margin: '0 0 6px 0', fontSize: '10px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>1. Head of Family (HoF)</h5>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           <div style={{ flex: '1 1 180px' }}><label style={lbl}>HoF Name *</label><input required style={inp} value={censusForm.hof_name} onChange={e => setCensusForm({ ...censusForm, hof_name: e.target.value.toUpperCase() })} /></div>
-                          <div style={{ flex: '1 1 140px' }}>
+                          <div style={{ flex: '1 1 80px' }}><label style={lbl}>Age *</label><input required type="number" style={inp} value={censusForm.age || ''} onChange={e => setCensusForm({ ...censusForm, age: e.target.value })} /></div>
+                          
+                          <div style={{ flex: '1 1 200px' }}>
                             <label style={lbl}>Phone</label>
                             <div style={{ display: 'flex', gap: '4px' }}>
-                              <select value={censusForm.country_code || '+91'} onChange={e => setCensusForm({ ...censusForm, country_code: e.target.value })} style={{ width: '70px', padding: '7px 4px', borderRadius: '9px', border: '1px solid #cbd5e1', backgroundColor: '#eff6ff', fontSize: '9px', fontWeight: '900', color: '#1e3a8a', outline: 'none', marginBottom: '8px' }}>
+                              <select value={censusForm.country_code || '+91'} onChange={e => setCensusForm({ ...censusForm, country_code: e.target.value })} style={{ width: '75px', padding: '7px 4px', borderRadius: '9px', border: '1px solid #cbd5e1', backgroundColor: '#eff6ff', fontSize: '10px', fontWeight: '900', color: '#1e3a8a', outline: 'none', marginBottom: '8px' }}>
                                 {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                               </select>
-                              <input type="tel" maxLength={10} style={{ ...inp, flex: 1, marginBottom: '8px' }} value={censusForm.phone} onChange={e => setCensusForm({ ...censusForm, phone: e.target.value.replace(/\D/g, '') })} />
+                              <input type="tel" maxLength={COUNTRY_CODES.find(c => c.code === (censusForm.country_code || '+91'))?.max || 10} style={{ ...inp, flex: 1, marginBottom: '8px' }} value={censusForm.phone} onChange={e => setCensusForm({ ...censusForm, phone: e.target.value.replace(/\D/g, '') })} />
                             </div>
                           </div>
-                          <FormDropdown label="Native Place *" value={censusForm.native_place} options={NATIVE_PLACES} onSelect={v => setCensusForm({ ...censusForm, native_place: v })} />
-                          <div style={{ flex: '1 1 180px' }}><label style={lbl}>Current City / Area *</label><input required style={inp} value={censusForm.current_residence} onChange={e => setCensusForm({ ...censusForm, current_residence: e.target.value.toUpperCase() })} /></div>
+                          
+                          <div style={{ flex: '1 1 150px' }}>
+                            <label style={lbl}>Native Place *</label>
+                            <select required style={inp} value={censusForm.native_place} onChange={e => setCensusForm({ ...censusForm, native_place: e.target.value })}>
+                              <option value="">-- SELECT --</option>
+                              {NATIVE_PLACES.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ flex: '1 1 70px' }}><label style={lbl}>Door No</label><input style={inp} value={censusForm.door_no || ''} onChange={e => setCensusForm({ ...censusForm, door_no: e.target.value.toUpperCase() })} /></div>
+                          <div style={{ flex: '1 1 180px' }}><label style={lbl}>Street Name *</label><input required style={inp} value={censusForm.street || ''} onChange={e => setCensusForm({ ...censusForm, street: e.target.value.toUpperCase() })} /></div>
+                          <div style={{ flex: '1 1 180px' }}><label style={lbl}>Current City / Area *</label><input required style={inp} value={censusForm.current_residence || ''} onChange={e => setCensusForm({ ...censusForm, current_residence: e.target.value.toUpperCase() })} /></div>
                         </div>
 
                         {/* SECTION 2: ECONOMIC/WELFARE INDICATORS */}
                         <h5 style={{ margin: '10px 0 6px 0', fontSize: '10px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>2. Economic Indicators</h5>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <FormDropdown label="Housing" value={censusForm.housing_status} options={['OWNED', 'RENTED', 'LEASE', 'NO HOME']} onSelect={v => setCensusForm({ ...censusForm, housing_status: v })} />
-                          <FormDropdown label="Mthly Income" value={censusForm.income_bracket} options={['BELOW 10K', '10K - 25K', '25K - 50K', '50K - 1L', 'ABOVE 1L']} onSelect={v => setCensusForm({ ...censusForm, income_bracket: v })} />
-                          <FormDropdown label="Zakat Eligible" value={censusForm.zakat_eligible} options={['YES', 'NO']} onSelect={v => setCensusForm({ ...censusForm, zakat_eligible: v })} />
-                          <FormDropdown label="Special Needs" value={censusForm.special_needs} options={['NONE', 'WIDOW', 'DIFFERENTLY ABLED', 'PATIENT', 'ORPHAN', 'ELDER ILLNESS', 'OTHER']} onSelect={v => setCensusForm({ ...censusForm, special_needs: v })} />
+                          <div style={{ flex: '1 1 140px' }}>
+                            <label style={lbl}>House Type *</label>
+                            <select required style={inp} value={censusForm.housing_status} onChange={e => setCensusForm({ ...censusForm, housing_status: e.target.value })}>
+                              <option value="">-- SELECT --</option><option value="OWNED">OWNED</option><option value="RENTED">RENTED</option><option value="LEASE">LEASE</option><option value="NO HOME">NO HOME</option>
+                            </select>
+                          </div>
+                          <div style={{ flex: '1 1 140px' }}>
+                            <label style={lbl}>Mthly Income *</label>
+                            <select required style={inp} value={censusForm.income_bracket} onChange={e => setCensusForm({ ...censusForm, income_bracket: e.target.value })}>
+                              <option value="">-- SELECT --</option><option value="BELOW 10K">BELOW 10K</option><option value="10K - 25K">10K - 25K</option><option value="25K - 50K">25K - 50K</option><option value="50K - 1L">50K - 1L</option><option value="ABOVE 1L">ABOVE 1L</option>
+                            </select>
+                          </div>
+                          <div style={{ flex: '1 1 140px' }}>
+                            <label style={lbl}>Zakat Eligible *</label>
+                            <select required style={inp} value={censusForm.zakat_eligible} onChange={e => setCensusForm({ ...censusForm, zakat_eligible: e.target.value })}>
+                              <option value="">-- SELECT --</option><option value="YES">YES</option><option value="NO">NO</option>
+                            </select>
+                          </div>
+                          <div style={{ flex: '1 1 140px' }}>
+                            <label style={lbl}>Special Needs *</label>
+                            <select required style={inp} value={censusForm.special_needs} onChange={e => setCensusForm({ ...censusForm, special_needs: e.target.value })}>
+                              <option value="">-- SELECT --</option><option value="NONE">NONE</option><option value="WIDOW">WIDOW</option><option value="DIFFERENTLY ABLED">DIFFERENTLY ABLED</option><option value="PATIENT">PATIENT</option><option value="ORPHAN">ORPHAN</option><option value="ELDER ILLNESS">ELDER ILLNESS</option><option value="OTHER">OTHER</option>
+                            </select>
+                          </div>
                         </div>
 
                         <button type="submit" disabled={isSubmitting} style={{ width: '100%', marginTop: '14px', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}>
