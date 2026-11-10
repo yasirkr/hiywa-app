@@ -24,6 +24,11 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
   
   const [showCensusModal, setShowCensusModal] = useState(false);
   const [censusForm, setCensusForm] = useState(null);
+  const [isHofDetailsModalOpen, setIsHofDetailsModalOpen] = useState(false);
+  const [isAddFamilyMemberModalOpen, setIsAddFamilyMemberModalOpen] = useState(false);
+  const [isViewMembersModalOpen, setIsViewMembersModalOpen] = useState(false);
+  const [activeHof, setActiveHof] = useState(null);
+  const [memberFormData, setMemberFormData] = useState({ name: '', relationship: 'SPOUSE', age: '', education: '', employment: '' });
   
 
   const logAdminEvent = async (action, details) => {
@@ -413,12 +418,39 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
     try {
       const docId = censusForm.id || `CEN_${Date.now()}`;
       const payload = { ...censusForm, id: docId, updated_at: new Date().toISOString() };
+      if (!payload.family_members) payload.family_members = [];
+      
       await setDoc(doc(db, 'census_households', docId), payload);
       logAdminEvent(censusForm.id ? 'Updated Census' : 'Added Census', `Household: ${censusForm.hof_name}`);
       setShowCensusModal(false);
+      
+      setActiveHof(payload);
+      setIsHofDetailsModalOpen(true);
       fetchData();
     } catch (err) {
       alert('Failed to save census: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveFamilyMember = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!memberFormData.name || !memberFormData.age) return alert('Name and Age are required.');
+    setIsSubmitting(true);
+    try {
+      const hofRef = doc(db, 'census_households', activeHof.id);
+      const updatedMembers = [...(activeHof.family_members || []), memberFormData];
+      
+      await updateDoc(hofRef, { family_members: updatedMembers });
+
+      setActiveHof(prev => ({ ...prev, family_members: updatedMembers }));
+      setIsAddFamilyMemberModalOpen(false);
+      setMemberFormData({ name: '', relationship: 'SPOUSE', age: '', education: '', employment: '' });
+      fetchData();
+      alert("Family Member added!");
+    } catch (error) {
+      alert("Error adding member: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -1206,7 +1238,7 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                   {/* HOUSEHOLDS LIST */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {fList.map((h, idx) => (
-                      <div key={h.id} onClick={() => { setCensusForm(h); setShowCensusModal(true); }} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '12px', border: '1px solid #cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={h.id} onClick={() => { setActiveHof(h); setIsHofDetailsModalOpen(true); }} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '12px', border: '1px solid #cbd5e1', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <p style={{ margin: '0 0 2px 0', fontSize: '12px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>{h.hof_name}</p>
                           <p style={{ margin: 0, fontSize: '9px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>{h.native_place} • {h.current_residence} • {1 + (h.family_members?.length || 0)} Members</p>
@@ -1246,34 +1278,119 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                           <div style={{ flex: '1 1 100%' }}><label style={lbl}>Special Needs (Widows, Ill, Disabled)</label><input style={inp} value={censusForm.special_needs} onChange={e => setCensusForm({ ...censusForm, special_needs: e.target.value.toUpperCase() })} placeholder="e.g. Heart Patient, Differently Abled" /></div>
                         </div>
 
-                        {/* SECTION 3: DEPENDENTS / FAMILY */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 8px 0', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                          <h5 style={{ margin: 0, fontSize: '10px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>3. Dependents / Family ({censusForm.family_members.length})</h5>
-                          <button type="button" onClick={() => setCensusForm({ ...censusForm, family_members: [...censusForm.family_members, { name: '', relationship: 'SPOUSE', age: '', education: '', employment: '' }] })} style={{ backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', padding: '4px 8px', borderRadius: '6px', fontSize: '8.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>+ Add Member</button>
-                        </div>
-                        
-                        <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
-                          {censusForm.family_members.map((fm, i) => (
-                            <div key={i} style={{ backgroundColor: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', position: 'relative' }}>
-                              <button type="button" onClick={() => { const nf = [...censusForm.family_members]; nf.splice(i, 1); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ position: 'absolute', top: '-5px', right: '-5px', backgroundColor: '#ef4444', color: '#fff', border: 'none', width: '20px', height: '20px', borderRadius: '50%', fontSize: '10px', fontWeight: '900', cursor: 'pointer', zIndex: 10 }}>✕</button>
-                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                <input placeholder="Name *" value={fm.name} onChange={e => { const nf = [...censusForm.family_members]; nf[i].name = e.target.value.toUpperCase(); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 120px', marginBottom: '4px' }} required />
-                                <select value={fm.relationship} onChange={e => { const nf = [...censusForm.family_members]; nf[i].relationship = e.target.value; setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 100px', marginBottom: '4px' }}>
-                                  <option value="SPOUSE">Spouse</option><option value="SON">Son</option><option value="DAUGHTER">Daughter</option><option value="FATHER">Father</option><option value="MOTHER">Mother</option><option value="SIBLING">Sibling</option><option value="OTHER">Other</option>
-                                </select>
-                                <input type="number" placeholder="Age *" value={fm.age} onChange={e => { const nf = [...censusForm.family_members]; nf[i].age = e.target.value; setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 50px', marginBottom: '4px' }} required />
-                                <input placeholder="Education / Class" value={fm.education} onChange={e => { const nf = [...censusForm.family_members]; nf[i].education = e.target.value.toUpperCase(); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 120px', marginBottom: 0 }} />
-                                <input placeholder="Job / School Name" value={fm.employment} onChange={e => { const nf = [...censusForm.family_members]; nf[i].employment = e.target.value.toUpperCase(); setCensusForm({ ...censusForm, family_members: nf }); }} style={{ ...inp, flex: '1 1 120px', marginBottom: 0 }} />
-                              </div>
-                            </div>
-                          ))}
-                          {censusForm.family_members.length === 0 && <p style={{ fontSize: '9px', color: '#94a3b8', textAlign: 'center', fontWeight: '800' }}>No dependents added.</p>}
-                        </div>
-
-                        <button type="submit" disabled={isSubmitting} style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                        <button type="submit" disabled={isSubmitting} style={{ width: '100%', marginTop: '14px', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}>
                           {isSubmitting ? 'Saving...' : '💾 Save Household'}
                         </button>
                       </form>
+                    </div>
+                  )}
+
+                  {/* HOF DETAILS MODAL (THE HUB) */}
+                  {isHofDetailsModalOpen && activeHof && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)' }}>
+                      <div style={{ width: '100%', maxWidth: '340px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '18px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>Household Profile</h4>
+                          <button type="button" onClick={() => setIsHofDetailsModalOpen(false)} style={{ background: '#f1f5f9', border: 'none', width: '28px', height: '28px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+                        
+                        <div style={{ marginBottom: '16px' }}>
+                          <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#1e3a8a', fontWeight: '900', textTransform: 'uppercase' }}>{activeHof.hof_name}</h2>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#475569', fontWeight: '700' }}>📞 {activeHof.phone || 'N/A'}</p>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#475569', fontWeight: '700' }}>📍 {activeHof.current_residence} ({activeHof.native_place})</p>
+                          <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#475569', fontWeight: '700' }}>👨‍👩‍👧‍👦 Total Members: {1 + (activeHof.family_members?.length || 0)}</p>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => { setCensusForm(activeHof); setIsHofDetailsModalOpen(false); setShowCensusModal(true); }} style={{ flex: 1, padding: '10px', backgroundColor: '#eff6ff', color: '#1e3a8a', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: '900', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                              ✏️ Edit HOF Info
+                            </button>
+                            <button onClick={() => setIsAddFamilyMemberModalOpen(true)} style={{ flex: 1, padding: '10px', backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                              + Add Member
+                            </button>
+                          </div>
+                          
+                          <button onClick={() => setIsViewMembersModalOpen(true)} style={{ width: '100%', padding: '10px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                            👥 View Member Details
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ADD FAMILY MEMBER MODAL */}
+                  {isAddFamilyMemberModalOpen && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.8)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)' }}>
+                      <form onSubmit={handleSaveFamilyMember} style={{ width: '100%', maxWidth: '320px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '18px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>Add Family Member</h4>
+                          <button type="button" onClick={() => setIsAddFamilyMemberModalOpen(false)} style={{ background: '#f1f5f9', border: 'none', width: '28px', height: '28px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                          <div><label style={lbl}>Name *</label><input required style={inp} value={memberFormData.name} onChange={e => setMemberFormData({ ...memberFormData, name: e.target.value.toUpperCase() })} /></div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ flex: 1 }}><label style={lbl}>Relationship</label>
+                              <select style={inp} value={memberFormData.relationship} onChange={e => setMemberFormData({ ...memberFormData, relationship: e.target.value })}>
+                                <option value="SPOUSE">Spouse</option><option value="SON">Son</option><option value="DAUGHTER">Daughter</option><option value="FATHER">Father</option><option value="MOTHER">Mother</option><option value="SIBLING">Sibling</option><option value="OTHER">Other</option>
+                              </select>
+                            </div>
+                            <div style={{ width: '80px' }}><label style={lbl}>Age *</label><input required type="number" style={inp} value={memberFormData.age} onChange={e => setMemberFormData({ ...memberFormData, age: e.target.value })} /></div>
+                          </div>
+                          <div><label style={lbl}>Education / Class</label><input style={inp} value={memberFormData.education} onChange={e => setMemberFormData({ ...memberFormData, education: e.target.value.toUpperCase() })} /></div>
+                          <div><label style={lbl}>Job / School Name</label><input style={inp} value={memberFormData.employment} onChange={e => setMemberFormData({ ...memberFormData, employment: e.target.value.toUpperCase() })} /></div>
+                        </div>
+
+                        <button type="submit" disabled={isSubmitting} style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer' }}>
+                          {isSubmitting ? 'Saving...' : '💾 Save Member'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* VIEW MEMBERS MODAL */}
+                  {isViewMembersModalOpen && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.8)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)' }}>
+                      <div style={{ width: '100%', maxWidth: '340px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '18px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '900', color: '#0a192f', textTransform: 'uppercase' }}>Family Members List</h4>
+                          <button type="button" onClick={() => setIsViewMembersModalOpen(false)} style={{ background: '#f1f5f9', border: 'none', width: '28px', height: '28px', borderRadius: '50%', fontWeight: '900', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+                        
+                        <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
+                          {(!activeHof?.family_members || activeHof.family_members.length === 0) ? (
+                            <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', fontWeight: '800', margin: '20px 0' }}>No family members added yet.</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {activeHof.family_members.map((member, index) => (
+                                <div key={index} style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', position: 'relative' }}>
+                                  <button type="button" onClick={async () => {
+                                    if(window.confirm('Delete this member?')) {
+                                      const newMembers = [...activeHof.family_members];
+                                      newMembers.splice(index, 1);
+                                      await updateDoc(doc(db, 'census_households', activeHof.id), { family_members: newMembers });
+                                      setActiveHof({ ...activeHof, family_members: newMembers });
+                                      fetchData();
+                                    }
+                                  }} style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', width: '24px', height: '24px', borderRadius: '6px', fontSize: '10px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🗑️</button>
+                                  <h5 style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#0f172a', fontWeight: '900', textTransform: 'uppercase', paddingRight: '30px' }}>{member.name}</h5>
+                                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '9.5px', color: '#475569', fontWeight: '700', textTransform: 'uppercase' }}>
+                                    <span style={{ backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{member.relationship}</span>
+                                    <span style={{ backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{member.age} Yrs</span>
+                                  </div>
+                                  {(member.education || member.employment) && (
+                                    <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #cbd5e1', fontSize: '9.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
+                                      {member.education && <div>🎓 {member.education}</div>}
+                                      {member.employment && <div>💼 {member.employment}</div>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
