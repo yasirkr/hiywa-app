@@ -524,9 +524,9 @@ export function HomeScreen({ currentUser, onNavigate, onLogout, adminMode, setAd
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px 10px' }}>
               <AdminHomeTile id="STATS" icon="📊" label="Overview" perm="ALL" />
-              <AdminHomeTile id="USERS" icon="👥" label="Members" perm="MANAGE_USERS" />
-              <AdminHomeTile id="STUDENTS" icon="🎓" label="Students" perm="MANAGE_USERS" />
-              <AdminHomeTile id="CENSUS" icon="📋" label="Census" perm="MANAGE_USERS" />
+              <AdminHomeTile id="USERS" icon="👥" label="Members" perm="MANAGE_MEMBERS" />
+              <AdminHomeTile id="STUDENTS" icon="🎓" label="Students" perm="MANAGE_STUDENTS" />
+              <AdminHomeTile id="CENSUS" icon="📋" label="Census" perm="MANAGE_CENSUS" />
               <AdminHomeTile id="SUBSCRIPTIONS" icon="📅" label="Dues" perm="MANAGE_FINANCE" />
               <AdminHomeTile id="FINANCE" icon="💵" label="Finance" perm="MANAGE_FINANCE" />
               <AdminHomeTile id="CAMPAIGNS" icon="📢" label="Causes" perm="MANAGE_CAMPAIGNS" />

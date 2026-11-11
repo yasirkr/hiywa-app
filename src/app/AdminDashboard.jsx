@@ -110,7 +110,7 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
   const [promoteUserId, setPromoteUserId] = useState(null);
   const [promoteSearchQuery, setPromoteSearchQuery] = useState('');
-  const [selectedPerms, setSelectedPerms] = useState({ ALL: false, MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
+  const [selectedPerms, setSelectedPerms] = useState({ ALL: false, MANAGE_MEMBERS: false, MANAGE_STUDENTS: false, MANAGE_CENSUS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
 
   // Reports Filters
   const [repType, setRepType] = useState('DIRECTORY');
@@ -1264,7 +1264,18 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                     <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '16px', border: '1px solid #cbd5e1', marginBottom: '16px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #f1f5f9' }}>
                         <button onClick={() => setActiveHof(null)} style={{ background: '#f1f5f9', border: 'none', padding: '7px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', cursor: 'pointer', textTransform: 'uppercase' }}>← Back to List</button>
-                        <button onClick={() => { setCensusForm(activeHof); setShowCensusModal(true); }} style={{ backgroundColor: '#1e3a8a', color: '#ffffff', border: 'none', padding: '7px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>✏️ Edit Info</button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {isCore && (
+                            <button onClick={() => {
+                              confirmAction('Delete Household', 'Are you sure you want to permanently delete this entire household and all its members?', async () => {
+                                await deleteDoc(doc(db, 'census_households', activeHof.id));
+                                setActiveHof(null);
+                                fetchData();
+                              });
+                            }} style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '7px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>🗑️ Delete</button>
+                          )}
+                          <button onClick={() => { setCensusForm(activeHof); setShowCensusModal(true); }} style={{ backgroundColor: '#1e3a8a', color: '#ffffff', border: 'none', padding: '7px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>✏️ Edit Info</button>
+                        </div>
                       </div>
 
                       <div style={{ marginBottom: '16px' }}>
@@ -2009,7 +2020,7 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                     onClick={() => {
                       setPromoteUserId('');
                       setPromoteSearchQuery('');
-                      setSelectedPerms({ ALL: false, MANAGE_USERS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
+                      setSelectedPerms({ ALL: false, MANAGE_MEMBERS: false, MANAGE_STUDENTS: false, MANAGE_CENSUS: false, MANAGE_FINANCE: false, MANAGE_CAMPAIGNS: false, REPORTS_CENTRAL: false });
                       setPromoteModalVisible(true);
                     }}
                     style={{ backgroundColor: '#0a192f', color: '#fbbf24', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 10px rgba(10,25,47,0.2)' }}
@@ -2048,7 +2059,9 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                               onClick={() => {
                                 setPromoteUserId(a.official_id);
                                 setSelectedPerms({
-                                  MANAGE_USERS: parsedPerms.includes('MANAGE_USERS'),
+                                  MANAGE_MEMBERS: parsedPerms.includes('MANAGE_MEMBERS'),
+                                  MANAGE_STUDENTS: parsedPerms.includes('MANAGE_STUDENTS'),
+                                  MANAGE_CENSUS: parsedPerms.includes('MANAGE_CENSUS'),
                                   MANAGE_FINANCE: parsedPerms.includes('MANAGE_FINANCE'),
                                   MANAGE_CAMPAIGNS: parsedPerms.includes('MANAGE_CAMPAIGNS'),
                                   REPORTS_CENTRAL: parsedPerms.includes('REPORTS_CENTRAL')
@@ -2162,19 +2175,6 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                     </button>
                   </div>
                 </div>
-
-                {/* Compact Danger Zone (CORE ADMIN ONLY) */}
-                {isCore && (
-                  <div style={{ backgroundColor: '#fef2f2', borderRadius: '16px', padding: '12px', border: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: '10px', fontWeight: '900', color: '#991b1b', textTransform: 'uppercase' }}>Danger Zone</h4>
-                      <p style={{ margin: '2px 0 0 0', fontSize: '8.5px', color: '#b91c1c', fontWeight: '600' }}>Reset non-core members, txns & drives</p>
-                    </div>
-                    <button onClick={() => setMasterResetModal(true)} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>
-                      ⚠️ Wipe Data
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </>
@@ -2737,7 +2737,9 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
             </label>
             {[
               ['ALL', '🌟 SUPER ADMIN (All Pages)'],
-              ['MANAGE_USERS', '👥 Members & Students Directory'],
+              ['MANAGE_MEMBERS', '👥 Members Directory'],
+              ['MANAGE_STUDENTS', '🎓 Students Directory'],
+              ['MANAGE_CENSUS', '📋 Census Module'],
               ['MANAGE_FINANCE', '💵 Finance & Subscription Dues'],
               ['MANAGE_CAMPAIGNS', '📢 Cause Drives / Campaigns'],
               ['REPORTS_CENTRAL', '📑 Reports Central']
