@@ -56,8 +56,6 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
 
   const [configModal, setConfigModal] = useState(null);
   const [configModalPassword, setConfigModalPassword] = useState('');
-  const [masterResetModal, setMasterResetModal] = useState(false);
-  const [masterResetPassword, setMasterResetPassword] = useState('');
 
   // Directory & Detail States
   const [selectedDetailUser, setSelectedDetailUser] = useState(null);
@@ -205,7 +203,6 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
         
         // Admin Actions & Settings Flow
         if (actionModal) { setActionModal(null); return true; }
-        if (masterResetModal) { setMasterResetModal(false); return true; }
         if (promoteModalVisible) { setPromoteModalVisible(false); return true; }
         if (configModal) { setConfigModal(null); return true; }
         if (showSliderModal) { setShowSliderModal(false); return true; }
@@ -218,7 +215,7 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
     isEditingUser, selectedDetailUser, 
     viewCampDonors, viewClosedCamp, showCampaignModal, campCashModalVisible, statusRemarkModal,
     viewMemberContrib, expenseModalVisible, guestModalVisible, cashModalVisible, showDuesModal, showCumulativeModal,
-    actionModal, masterResetModal, promoteModalVisible, configModal, showSliderModal
+    actionModal, promoteModalVisible, configModal, showSliderModal
   ]);
 
   // EXECUTING ACTIONS FROM THE ACTIONS PAGE & MODALS
@@ -403,59 +400,6 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
     ].map(cleanCSV).join(",")).join("\n");
 
     downloadCSV(headers + rows, "HIYWA_Complete_Finance_Report.csv");
-  };
-
-  // MASTER DATABASE WIPE HANDLER
-  const handleMasterDatabaseReset = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!masterResetPassword) return alert('Please enter your admin password.');
-    setIsSubmitting(true);
-    try {
-      const adminSnap = await getDoc(doc(db, 'members', currentUser.official_id));
-      if (!adminSnap.exists() || adminSnap.data().password !== masterResetPassword) {
-        setIsSubmitting(false);
-        return alert('Incorrect admin password! Wipe aborted.');
-      }
-
-      const membersSnap = await getDocs(collection(db, 'members'));
-      let deletedMembers = 0;
-      for (const dSnap of membersSnap.docs) {
-        if (dSnap.data().is_core_admin === true) {
-          await updateDoc(doc(db, 'members', dSnap.id), { total_months_paid: 0 });
-          continue;
-        }
-        await deleteDoc(doc(db, 'members', dSnap.id));
-        deletedMembers++;
-      }
-
-      const txnsSnap = await getDocs(collection(db, 'transactions'));
-      let deletedTxns = 0;
-      for (const dSnap of txnsSnap.docs) {
-        await deleteDoc(doc(db, 'transactions', dSnap.id));
-        deletedTxns++;
-      }
-
-      const campsSnap = await getDocs(collection(db, 'campaigns'));
-      let deletedCamps = 0;
-      for (const dSnap of campsSnap.docs) {
-        await deleteDoc(doc(db, 'campaigns', dSnap.id));
-        deletedCamps++;
-      }
-
-      const logsSnap = await getDocs(collection(db, 'system_logs'));
-      for (const dSnap of logsSnap.docs) {
-        await deleteDoc(doc(db, 'system_logs', dSnap.id));
-      }
-
-      setMasterResetModal(false);
-      setMasterResetPassword('');
-      alert(`Wipe Complete!\n• Deleted Members/Students: ${deletedMembers}\n• Deleted Transactions: ${deletedTxns}\n• Deleted Campaigns: ${deletedCamps}`);
-      fetchData();
-    } catch (err) {
-      alert('Wipe failed: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleSaveCensus = async (e) => {
@@ -1268,9 +1212,14 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                           {isCore && (
                             <button onClick={() => {
                               confirmAction('Delete Household', 'Are you sure you want to permanently delete this entire household and all its members?', async () => {
-                                await deleteDoc(doc(db, 'census_households', activeHof.id));
-                                setActiveHof(null);
-                                fetchData();
+                                try {
+                                  await deleteDoc(doc(db, 'census_households', activeHof.id));
+                                  setActiveHof(null);
+                                  fetchData();
+                                  alert('Household deleted successfully.');
+                                } catch (err) {
+                                  alert('Delete failed! Check Firebase Rules: ' + err.message);
+                                }
                               });
                             }} style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '7px 12px', borderRadius: '8px', fontSize: '9.5px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}>🗑️ Delete</button>
                           )}
@@ -2074,10 +2023,14 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                             </button>
                             <button
                               onClick={async () => {
-                                await updateDoc(doc(db, 'members', a.official_id), { role: 'MEMBER', is_core_admin: false, admin_permissions: '[]' });
-                                logAdminEvent('Revoked Admin', a.official_id);
-                                alert(`Admin rights revoked for ${a.full_name}.`);
-                                fetchData();
+                                try {
+                                  await updateDoc(doc(db, 'members', a.official_id), { role: 'MEMBER', is_core_admin: false, admin_permissions: '[]' });
+                                  logAdminEvent('Revoked Admin', a.official_id);
+                                  alert(`Admin rights revoked for ${a.full_name}.`);
+                                  fetchData();
+                                } catch (err) {
+                                  alert('Revoke failed! Check Firebase Rules: ' + err.message);
+                                }
                               }}
                               style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', padding: '6px 9px', borderRadius: '7px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', cursor: 'pointer' }}
                             >
@@ -2296,34 +2249,6 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
           </div>
         );
       })()}
-
-      {/* MASTER DATABASE WIPE MODAL */}
-      {masterResetModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,25,47,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ width: '100%', maxWidth: '300px', backgroundColor: '#fff', borderRadius: '20px', padding: '20px', textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#dc2626', fontWeight: '900', textTransform: 'uppercase' }}>⚠️ Confirm Full Wipe</h3>
-            <p style={{ margin: '0 0 12px 0', fontSize: '10.5px', color: '#64748b', lineHeight: '1.4', fontWeight: '600' }}>
-              Deletes all non-core members, students, transactions & drives.
-            </p>
-            <form onSubmit={handleMasterDatabaseReset} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <input
-                type="password"
-                placeholder="Admin Password *"
-                value={masterResetPassword}
-                onChange={e => setMasterResetPassword(e.target.value)}
-                required
-                style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #fca5a5', fontSize: '12px', fontWeight: '900', textAlign: 'center', color: '#dc2626', boxSizing: 'border-box' }}
-              />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={() => { setMasterResetModal(false); setMasterResetPassword(''); }} style={{ flex: 1, padding: '10px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '10.5px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" disabled={isSubmitting} style={{ flex: 1, padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '10.5px', cursor: 'pointer' }}>
-                  {isSubmitting ? 'Wiping...' : 'Wipe Data'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* CUMULATIVE LEDGER MODAL */}
       {showCumulativeModal && (
@@ -2781,12 +2706,16 @@ export default function AdminDashboard({ currentUser, setCurrentUser, activeTab,
                 const arr = Object.keys(selectedPerms).filter(k => selectedPerms[k]);
                 if (arr.length === 0) return alert('Please select at least one permission.');
                 
-                await updateDoc(doc(db, 'members', promoteUserId), { role: 'ADMIN', admin_permissions: JSON.stringify(arr) });
-                logAdminEvent('Assigned Sub-Admin', `${promoteUserId} (${arr.join(', ')})`);
-                alert('Admin permissions saved successfully!');
-                setPromoteModalVisible(false);
-                setSelectedDetailUser(null);
-                fetchData();
+                try {
+                  await updateDoc(doc(db, 'members', promoteUserId), { role: 'ADMIN', admin_permissions: JSON.stringify(arr) });
+                  logAdminEvent('Assigned Sub-Admin', `${promoteUserId} (${arr.join(', ')})`);
+                  alert('Admin permissions saved successfully!');
+                  setPromoteModalVisible(false);
+                  setSelectedDetailUser(null);
+                  fetchData();
+                } catch (err) {
+                  alert('Save failed! Check Firebase Rules: ' + err.message);
+                }
               }}
               style={{ width: '100%', marginTop: '8px', padding: '12px', backgroundColor: '#1e3a8a', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: '900', fontSize: '11px', textTransform: 'uppercase', cursor: 'pointer', boxShadow: '0 4px 12px rgba(30,58,138,0.2)' }}
             >
